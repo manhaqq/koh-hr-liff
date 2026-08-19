@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ยืนยันตัวตนพนักงาน | โก๋ในซอย HR Hub</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="inner">
+    <div class="badge">🔐 ขั้นตอนความปลอดภัย</div>
+    <h1>ยืนยันตัวตนพนักงาน</h1>
+    <p id="orgline">ร้านโก๋ในซอย • HR Communication Hub</p>
+  </div>
+</div>
+
+<div class="wrap pull-up" id="content">
+  <div class="loading"><div class="spinner"></div><div>กำลังเตรียมระบบ...</div></div>
+</div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+(async function () {
+  try {
+    $('#orgline').textContent = CFGX.ORG + ' • ' + CFGX.TAGLINE;
+    await initLiff('verify', false);
+    const r = await api('me');
+    if (r.ok) { renderDone(r.me); return; }
+    renderForm(r.code);
+  } catch (e) { bootFail(e); }
+})();
+
+function renderForm(code) {
+  const blocked = ['RESIGNED', 'SUSPENDED'].includes(code);
+  $('#content').innerHTML = `
+    ${blocked ? `<div class="alert err">บัญชีนี้ถูกปิดการใช้งานแล้ว กรุณาติดต่อ HR โดยตรง</div>` : ''}
+
+    <div class="card">
+      <div class="eyebrow">ทำไมต้องยืนยัน</div>
+      <p class="muted" style="margin:0 0 12px">
+        ช่องทางนี้มีข้อมูลภายในของร้าน เช่น ตารางงาน ประกาศพนักงาน และช่องทางร้องเรียน
+        เราจึงยืนยันตัวตนก่อน เพื่อไม่ให้คนนอกที่บังเอิญแอดไลน์เข้ามาเห็นข้อมูลเหล่านี้
+      </p>
+      <div class="divider"></div>
+
+      <div class="field">
+        <label for="firstName">ชื่อจริง</label>
+        <div class="hint">ไม่ต้องใส่คำนำหน้า (นาย / นาง / นางสาว) — ใส่ชื่อเล่นแทนได้ถ้าแจ้ง HR ไว้</div>
+        <input type="text" id="firstName" placeholder="เช่น ฟาอีส" autocomplete="off">
+      </div>
+
+      <div class="field">
+        <label for="lastName">นามสกุล</label>
+        <div class="hint">สะกดตามบัตรประชาชน / ตามที่แจ้งไว้กับ HR</div>
+        <input type="text" id="lastName" placeholder="เช่น เดชพลรุ่งเรือง" autocomplete="off">
+      </div>
+
+      <div class="field">
+        <label for="phoneLast4">เบอร์โทรศัพท์ 4 ตัวท้าย</label>
+        <div class="hint">4 ตัวท้ายของเบอร์ที่แจ้งไว้กับ HR — ถ้าเปลี่ยนเบอร์แล้วยังไม่ได้แจ้ง จะยืนยันไม่ผ่าน</div>
+        <input type="tel" id="phoneLast4" class="code" maxlength="4" inputmode="numeric" placeholder="0000" autocomplete="off">
+      </div>
+
+      <div id="msg"></div>
+      <button class="btn" id="submitBtn" ${blocked ? 'disabled' : ''}>ยืนยันตัวตน</button>
+    </div>
+
+    <div class="card flat">
+      <div class="eyebrow">ข้อมูลของคุณปลอดภัย</div>
+      <p class="tiny" style="margin:0">
+        • ระบบเก็บเฉพาะชื่อ นามสกุล เบอร์โทร 4 ตัวท้าย และรหัสบัญชี LINE เพื่อจับคู่ตัวตน<br>
+        • <strong>ไม่เก็บเบอร์โทรเต็มและไม่เก็บเลขบัตรประชาชน</strong> ในระบบไลน์นี้<br>
+        • ข้อมูลถูกใช้ตามประกาศความเป็นส่วนตัวสำหรับพนักงาน (PDPA)<br>
+        • 1 พนักงาน ผูกได้ 1 บัญชี LINE เท่านั้น หากมีคนพยายามผูกซ้ำ ระบบแจ้ง HR ทันที<br>
+        • เมื่อพ้นสภาพพนักงาน ระบบจะตัดการเชื่อมต่อบัญชีทันที<br>
+        • หากยืนยันไม่สำเร็จเกิน 5 ครั้ง ระบบจะล็อกชั่วคราว 1 ชั่วโมง
+      </p>
+    </div>
+
+    <p class="tiny center">ยืนยันไม่ได้? แจ้งหัวหน้าแผนกหรือ HR เพื่อตรวจว่าชื่อและเบอร์ในทะเบียนตรงกับของคุณหรือไม่</p>
+  `;
+
+  const f = $('#firstName'), l = $('#lastName'), p = $('#phoneLast4');
+  p.addEventListener('input', e => e.target.value = e.target.value.replace(/\D/g, ''));
+  $('#submitBtn').addEventListener('click', submit);
+  [f, l, p].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); }));
+  f.focus();
+}
+
+async function submit() {
+  const btn = $('#submitBtn'), msg = $('#msg');
+  const firstName  = $('#firstName').value.trim();
+  const lastName   = $('#lastName').value.trim();
+  const phoneLast4 = $('#phoneLast4').value.trim();
+  msg.innerHTML = '';
+
+  if (!firstName) { msg.innerHTML = '<div class="alert err">กรุณากรอกชื่อจริง</div>'; return; }
+  if (!lastName)  { msg.innerHTML = '<div class="alert err">กรุณากรอกนามสกุล</div>'; return; }
+  if (!/^[0-9]{4}$/.test(phoneLast4)) {
+    msg.innerHTML = '<div class="alert err">กรุณากรอกเบอร์โทร 4 ตัวท้ายให้ครบ 4 หลัก</div>'; return;
+  }
+
+  btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ...';
+  const r = await api('verify', { firstName, lastName, phoneLast4 });
+  btn.disabled = false; btn.textContent = 'ยืนยันตัวตน';
+
+  if (!r.ok) {
+    /* รอ HR อนุมัติ ไม่ใช่ความผิดพลาด — แสดงคนละแบบกับกรอกผิด */
+    if (r.code === 'PENDING') {
+      $('#content').innerHTML = `
+        <div class="card center">
+          <div style="font-size:52px;line-height:1;margin-bottom:8px">⏳</div>
+          <h2 style="margin-bottom:4px">ข้อมูลถูกต้องแล้ว</h2>
+          <p class="muted" style="margin:0 0 12px">${esc(r.message)}</p>
+          <p class="tiny" style="margin:0">HR ได้รับอีเมลแจ้งแล้ว เมื่ออนุมัติเรียบร้อย เมนูด้านล่างจะเปิดให้เองโดยไม่ต้องทำอะไรเพิ่ม</p>
+        </div>`;
+      return;
+    }
+    msg.innerHTML = `<div class="alert err">${esc(r.message || 'ยืนยันไม่สำเร็จ')}</div>`;
+    return;
+  }
+  renderDone(r.me, true);
+}
+
+function renderDone(me, fresh) {
+  $('#content').innerHTML = `
+    <div class="card center">
+      <div style="font-size:52px;line-height:1;margin-bottom:8px">✅</div>
+      <h2 style="margin-bottom:4px">${fresh ? 'ยืนยันตัวตนสำเร็จ' : 'คุณยืนยันตัวตนแล้ว'}</h2>
+      <p class="muted" style="margin:0 0 16px">ยินดีต้อนรับสู่ ${esc(CFGX.ORG)} HR Hub</p>
+      <div style="text-align:left">
+        <div class="kv"><span class="k">ชื่อ</span><span class="v">${esc(me.fullName)}</span></div>
+        <div class="kv"><span class="k">รหัสพนักงาน</span><span class="v">${esc(me.empCode)}</span></div>
+        <div class="kv"><span class="k">ตำแหน่ง</span><span class="v">${esc(me.position || '-')}</span></div>
+        <div class="kv"><span class="k">แผนก</span><span class="v">${esc(me.dept || '-')}</span></div>
+      </div>
+    </div>
+    <div class="card flat">
+      <div class="eyebrow">ใช้งานได้แล้ว</div>
+      <p class="muted" style="margin:0 0 4px">เมนูด้านล่างของหน้าแชทเปิดครบ 4 ช่องแล้ว</p>
+      <p class="tiny" style="margin:0">📢 ประกาศ  •  📘 คู่มือและสวัสดิการ  •  🗓️ ตารางงาน  •  💬 ติดต่อ HR<br><br>
+      เคล็ดลับ<br>
+      • พิมพ์คำถามในแชทได้เลย เช่น “ลาป่วยกี่วัน” “OT คิดยังไง” ระบบตอบทันที<br>
+      • พิมพ์ “ผังองค์กร” เพื่อดูว่าเรื่องแต่ละอย่างต้องคุยกับใคร<br>
+      • มีจุดแดงบนเมนู = มีของใหม่ กดเข้าไปดูแล้วจุดจะหายเอง<br>
+      • เข้าเมนู “ตารางงาน” แล้วกดเพิ่มลงปฏิทิน มือถือจะเตือนกะให้เอง</p>
+    </div>
+    <button class="btn" onclick="liff.isInClient() ? liff.closeWindow() : history.back()">เริ่มใช้งาน</button>
+  `;
+  if (fresh) closeLiff(2600);
+}
+</script>
+</body>
+</html>

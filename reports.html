@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>รายการรายงาน | โก๋ในซอย HR Hub</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  .rep{background:#fff;border:1px solid var(--line);border-radius:var(--r);
+       padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow-sm);cursor:pointer}
+  .rep:active{transform:scale(.995)}
+  .rep .hd{display:flex;gap:8px;align-items:baseline}
+  .rep .t{font-size:15px;font-weight:600;line-height:1.45;flex:1}
+  .rep .d{font-size:12.5px;color:var(--sub);line-height:1.6;margin-top:5px}
+  .rep .how{font-size:11.5px;color:var(--warn);line-height:1.6;margin-top:8px;
+            background:#FBF3E0;border-radius:8px;padding:8px 10px}
+  .stat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:4px 0 2px}
+  .stat .b{background:#F2F7F4;border-radius:10px;padding:11px 8px;text-align:center}
+  .stat .b .n{font-size:19px;font-weight:700;color:var(--primary);line-height:1.2}
+  .stat .b .l{font-size:10.5px;color:var(--sub);margin-top:3px;line-height:1.3}
+  .bar{height:8px;border-radius:5px;background:#E8EFEA;overflow:hidden;margin-top:4px}
+  .bar > i{display:block;height:100%;background:var(--primary)}
+  .cov{display:flex;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .cov:last-child{border-bottom:0}
+  .cov .dt{flex:0 0 92px;font-weight:600}
+  .cov .n{flex:0 0 46px;text-align:right;font-weight:700}
+  .cov .dd{flex:1;font-size:11px;color:var(--sub);text-align:right}
+  .cov.low .n{color:var(--danger)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="inner">
+    <div class="badge">📊 รายงาน</div>
+    <h1>รายการรายงาน</h1>
+    <p id="sub">ข้อมูลคำนวณสดทุกครั้งที่เปิด</p>
+  </div>
+</div>
+
+<div class="wrap pull-up">
+  <div id="topArea"></div>
+  <div id="content"><div class="loading"><div class="spinner"></div><div>กำลังโหลดรายการรายงาน...</div></div></div>
+</div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+let ITEMS = [], ROLE = 'staff', CAT = 'ทั้งหมด';
+
+(async function () {
+  try {
+    await initLiff('reports');
+    const r = await api('reports');
+    if (!r.ok) return showError('#content', r.message || 'โหลดรายการรายงานไม่สำเร็จ', true);
+    ITEMS = r.items || [];
+    ROLE  = r.role || 'staff';
+    $('#sub').textContent = `คุณเปิดดูได้ ${ITEMS.length} รายงาน · ข้อมูลคำนวณสดทุกครั้ง`;
+    render();
+  } catch (e) { bootFail(e); }
+})();
+
+function cats() {
+  const s = new Set(ITEMS.map(i => i.category).filter(Boolean));
+  return ['ทั้งหมด', ...s];
+}
+
+function render() {
+  $('#topArea').innerHTML = `<div class="chips" id="chips">
+    ${cats().map(c => `<button class="chip ${c === CAT ? 'active' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}
+  </div>`;
+  $$('#chips .chip').forEach(b => b.onclick = () => { CAT = b.dataset.c; render(); });
+  list();
+}
+
+function list() {
+  const items = ITEMS.filter(i => CAT === 'ทั้งหมด' || i.category === CAT);
+  if (!items.length) return showEmpty('#content', '📭', 'ไม่มีรายงานในหมวดนี้');
+
+  $('#content').innerHTML = items.map(i => `
+    <div class="rep" data-id="${esc(i.reportId)}">
+      <div class="hd">
+        <div class="t">${esc(i.title)}</div>
+        ${i.openable ? '<span class="tag green">เปิดดูได้เลย</span>' : '<span class="tag gold">ดูใน Sheets</span>'}
+      </div>
+      <div class="d">${esc(i.description)}</div>
+      ${!i.openable && i.howto ? `<div class="how">📍 ${esc(i.howto)}</div>` : ''}
+    </div>`).join('') + `
+    <div class="card flat" style="margin-top:14px">
+      <div class="eyebrow">ความเป็นส่วนตัว</div>
+      <p class="tiny" style="margin:0">
+        รายงานส่วนตัวแสดงเฉพาะข้อมูลของคุณเท่านั้น เพื่อนร่วมงานเปิดดูของคุณไม่ได้<br>
+        รายงานระดับแผนกเปิดได้เฉพาะหัวหน้าแผนกนั้น ๆ<br>
+        รายงานทั้งองค์กรเปิดได้ใน Google Sheets เท่านั้น เพื่อไม่ให้ข้อมูลรวมหลุดออกจากมือถือ
+      </p>
+    </div>`;
+
+  $$('.rep').forEach(el => el.onclick = () => open(el.dataset.id));
+}
+
+async function open(id) {
+  const meta = ITEMS.filter(i => i.reportId === id)[0];
+  if (!meta) return;
+  if (!meta.openable) { toast('รายงานชุดนี้เปิดได้ใน Google Sheets เท่านั้น'); return; }
+
+  showLoading('#content', 'กำลังคำนวณ...');
+  const r = await api('report_data', { reportId: id });
+  if (!r.ok) {
+    $('#content').innerHTML =
+      `<button class="btn ghost sm" onclick="back()" style="margin-bottom:12px">← กลับไปรายการรายงาน</button>
+       <div class="alert err">${esc(r.message || 'เปิดรายงานไม่สำเร็จ')}</div>`;
+    return;
+  }
+
+  const body =
+    r.kind === 'shift_next7'  ? viewShifts(r.data)   :
+    r.kind === 'hours_month'  ? viewHours(r.data)    :
+    r.kind === 'my_tickets'   ? viewTickets(r.data)  :
+    r.kind === 'my_leave'     ? viewLeave(r.data)    :
+    r.kind === 'dept_week'    ? viewDeptWeek(r.data) :
+    r.kind === 'coverage'     ? viewCoverage(r.data) :
+    '<div class="alert">ยังไม่รองรับรายงานรูปแบบนี้</div>';
+
+  $('#content').innerHTML = `
+    <button class="btn ghost sm" onclick="back()" style="margin-bottom:12px">← กลับไปรายการรายงาน</button>
+    <div class="card"><h2 style="margin-bottom:2px">${esc(meta.title)}</h2>
+      <p class="tiny" style="margin:0 0 12px">${esc(meta.description)}</p>
+      ${body}</div>`;
+}
+
+function back() { render(); window.scrollTo(0, 0); }
+
+/* ---------- R01 กะ 7 วันข้างหน้า ---------- */
+function viewShifts(rows) {
+  const work = rows.filter(r => r.shiftCode !== 'OFF');
+  if (!rows.length) return '<div class="alert">ยังไม่มีตารางกะในช่วงนี้ — แจ้งหัวหน้าแผนกได้เลย</div>';
+  return rows.map(r => {
+    const off = r.shiftCode === 'OFF';
+    return `<div class="shift-row">
+      <div class="shift-bar" style="background:${off ? '#D8DEDB' : esc(r.color)}"></div>
+      <div class="shift-date"><div class="dd">${thDate(r.date)}</div><div class="mm">${thDay(r.date)}</div></div>
+      <div class="shift-info">
+        <div class="nm" style="${off ? 'color:var(--sub)' : ''}">${esc(r.shiftName)}</div>
+        <div class="tm">${off ? 'วันหยุด' : esc(r.start) + '–' + esc(r.end)}${r.breaks ? ' · พัก ' + esc(r.breaks) : ''}</div>
+        ${r.ot ? `<div class="tm" style="color:var(--warn)">⏱ ${esc(r.ot)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('') + `<p class="tiny" style="margin:12px 0 0">เข้างาน ${work.length} วันใน 7 วันข้างหน้า ·
+    อยากให้มือถือเตือนเอง? เข้าเมนู “ตารางงาน” แล้วกดเพิ่มลงปฏิทิน</p>`;
+}
+
+/* ---------- R02 ชั่วโมงเดือนนี้ ---------- */
+function viewHours(d) {
+  return `<div class="stat">
+      <div class="b"><div class="n">${d.days}</div><div class="l">วันเข้างาน</div></div>
+      <div class="b"><div class="n">${d.hours}</div><div class="l">ชั่วโมงรวม</div></div>
+      <div class="b"><div class="n">${d.otHours}</div><div class="l">ชั่วโมง OT</div></div>
+    </div>
+    <div class="kv" style="margin-top:10px"><span class="k">ช่วงที่นับ</span><span class="v">${thDate(d.from)} – ${thDate(d.to)}</span></div>
+    <div class="kv"><span class="k">วันหยุดประจำสัปดาห์</span><span class="v">${d.offDays} วัน</span></div>
+    <div class="kv"><span class="k">เวลาพักที่หักออกแล้ว</span><span class="v">${d.breakHours} ชม.</span></div>
+    <p class="tiny" style="margin:12px 0 0">⚠️ ${esc(d.note)}<br>
+      ถ้าตัวเลขไม่ตรงกับที่สแกนจริง ให้ยึดข้อมูลในแอป myHR Cloud เป็นหลัก และแจ้ง HR ผ่านเมนู “ติดต่อ HR”</p>`;
+}
+
+/* ---------- R03 เรื่องที่ส่งถึง HR ---------- */
+function viewTickets(rows) {
+  if (!rows.length) return '<div class="alert">คุณยังไม่เคยส่งเรื่องถึง HR</div>';
+  return rows.map(t => `<div class="item">
+      <div class="meta"><span class="tag">${esc(t.category)}</span>
+        <span>${esc(t.ticketId)}</span><span>${thDate(t.createdAt)}</span></div>
+      <div class="title">${esc(t.subject || '(ไม่มีหัวข้อ)')}</div>
+      <div class="excerpt">สถานะ: ${esc(t.status || '-')}${t.slaDue ? ' · กำหนดตอบ ' + thDate(t.slaDue) : ''}</div>
+      ${t.reply ? `<div class="excerpt" style="color:var(--primary)">💬 ${esc(t.reply)}</div>` : ''}
+    </div>`).join('');
+}
+
+/* ---------- R04 ประวัติการลา ---------- */
+function viewLeave(rows) {
+  if (!rows.length) return '<div class="alert">ยังไม่มีใบลาที่ยื่นผ่านไลน์<br>' +
+    '<span class="tiny">ใบลาที่ยื่นในแอป myHR Cloud หรือกระดาษจะไม่แสดงที่นี่</span></div>';
+  const days = rows.filter(l => l.status === 'approved').reduce((a, b) => a + (+b.days || 0), 0);
+  return `<div class="kv"><span class="k">วันลาที่อนุมัติแล้วรวม</span><span class="v">${days} วัน</span></div>` +
+    rows.map(l => `<div class="item">
+      <div class="meta"><span class="tag">${esc(l.type)}</span><span>${esc(l.leaveId)}</span></div>
+      <div class="title">${thDate(l.dateFrom)}${l.dateTo && l.dateTo !== l.dateFrom ? ' – ' + thDate(l.dateTo) : ''} (${esc(l.days)} วัน)</div>
+      <div class="excerpt">สถานะ: ${esc(l.status || '-')}${l.remark ? ' · ' + esc(l.remark) : ''}</div>
+    </div>`).join('');
+}
+
+/* ---------- R05 ตารางกะทั้งแผนก ---------- */
+function viewDeptWeek(d) {
+  if (d.warning) return `<div class="alert err">${esc(d.warning)}</div>`;
+  if (!d.rows.length) return '<div class="alert">ยังไม่มีตารางกะของแผนกในช่วงนี้</div>';
+  const byDate = {};
+  d.rows.forEach(r => (byDate[r.date] = byDate[r.date] || []).push(r));
+  return `<p class="tiny" style="margin:0 0 10px">แผนก${esc(d.dept)} · ${thDate(d.from)} – ${thDate(d.to)}</p>` +
+    Object.keys(byDate).sort().map(dt => `
+      <div class="lvl" style="font-size:11px;font-weight:700;color:var(--sub);margin:14px 0 6px">
+        ${thDay(dt)} ${thDate(dt)}</div>
+      ${byDate[dt].filter(r => r.shiftCode !== 'OFF').map(r => `
+        <div class="cov"><div class="dt">${esc(r.name)}</div>
+          <div class="dd">${esc(r.shiftName)}</div>
+          <div class="n" style="flex:0 0 92px;font-weight:600;font-size:12px">${esc(r.start)}–${esc(r.end)}</div>
+        </div>`).join('') || '<p class="tiny">— ไม่มีคนเข้ากะ —</p>'}
+    `).join('');
+}
+
+/* ---------- R06 ความครอบคลุมกะ ---------- */
+function viewCoverage(d) {
+  if (!d.days.length) return '<div class="alert">ยังไม่มีข้อมูลตารางกะพอจะคำนวณ</div>';
+  const low = d.days.filter(x => x.low).length;
+  return `<div class="stat">
+      <div class="b"><div class="n">${d.avg}</div><div class="l">คนต่อวันโดยเฉลี่ย</div></div>
+      <div class="b"><div class="n" style="color:${low ? 'var(--danger)' : 'var(--ok)'}">${low}</div><div class="l">วันที่คนน้อยผิดปกติ</div></div>
+      <div class="b"><div class="n">${d.days.length}</div><div class="l">วันที่ตรวจ</div></div>
+    </div>
+    <div class="divider"></div>` +
+    d.days.map(x => `<div class="cov ${x.low ? 'low' : ''}">
+      <div class="dt">${thDay(x.date)} ${thDate(x.date)}</div>
+      <div class="dd">${esc(x.detail)}</div>
+      <div class="n">${x.total}${x.low ? ' ⚠️' : ''}</div>
+    </div>`).join('') +
+    `<p class="tiny" style="margin:12px 0 0">⚠️ = น้อยกว่า 70% ของค่าเฉลี่ย ควรตรวจว่ามีคนลาซ้อนกันหรือไม่<br>
+     คนที่ยังไม่ถูกจับคู่กับทะเบียนพนักงานจะไม่ถูกนับ — แจ้ง HR ให้เติมข้อมูลในชีต ShiftPattern</p>`;
+}
+</script>
+</body>
+</html>

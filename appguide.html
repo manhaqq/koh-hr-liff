@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>คู่มือแอป myHR Cloud | โก๋ในซอย HR Hub</title>
+<link rel="stylesheet" href="app.css">
+<style>
+.guide-img{border-radius:12px;border:1px solid var(--line);margin:12px 0;width:100%;
+  background:#fff;cursor:zoom-in;box-shadow:var(--shadow-sm)}
+.step-body{font-size:14px;line-height:1.85;white-space:pre-wrap;color:#33443B}
+.tipbox{background:#FDF6E3;border-left:3px solid var(--accent);border-radius:10px;
+  padding:11px 14px;margin-top:12px;font-size:12.5px;color:var(--warn);line-height:1.65}
+.lightbox{position:fixed;inset:0;background:rgba(11,26,19,.94);z-index:999;display:none;
+  align-items:center;justify-content:center;padding:12px;overflow:auto}
+.lightbox.on{display:flex}
+.lightbox img{max-width:100%;height:auto;border-radius:8px}
+.lightbox .x{position:fixed;top:calc(12px + env(safe-area-inset-top));right:14px;background:#fff;
+  color:var(--ink);border:0;border-radius:50%;width:38px;height:38px;font-size:20px;cursor:pointer;z-index:2}
+.zoomhint{font-size:11px;color:var(--sub);text-align:center;margin:-6px 0 8px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="inner">
+    <div class="badge">📱 คู่มือการใช้แอป</div>
+    <h1>myHR Cloud</h1>
+    <p>ลงเวลา ลางาน แลกกะ ขอเอกสาร และวิธีแก้ปัญหา</p>
+  </div>
+</div>
+
+<div class="wrap pull-up">
+  <div id="topArea"></div>
+  <div id="content"><div class="loading"><div class="spinner"></div><div>กำลังโหลดคู่มือ...</div></div></div>
+</div>
+
+<div class="lightbox" id="lb"><button class="x" onclick="closeLb()">✕</button><img id="lbimg" alt=""></div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+let ITEMS = [], GROUP = '';
+
+(async function () {
+  try {
+    await initLiff('appguide');
+    const r = await api('appguide');
+    if (!r.ok) return showError('#content', r.message, true);
+    ITEMS = r.items || [];
+    const deep = decodeURIComponent(qs('g') || '');
+    GROUP = groups().includes(deep) ? deep : (groups()[0] || '');
+    render();
+  } catch (e) { bootFail(e); }
+})();
+
+function groups() {
+  const seen = [];
+  ITEMS.forEach(i => { const g = (i.group || '').trim(); if (g && !seen.includes(g)) seen.push(g); });
+  return seen;
+}
+
+function render() {
+  $('#topArea').innerHTML = `
+    <div class="search"><input type="text" id="q" placeholder="ค้นหา เช่น ลืมรหัสผ่าน, แสกนไม่ได้"></div>
+    <div class="chips" id="chips">
+      ${groups().map(g => `<button class="chip ${g === GROUP ? 'active' : ''}" data-g="${esc(g)}">${esc(g)}</button>`).join('')}
+    </div>`;
+  $$('#chips .chip').forEach(b => b.onclick = () => { GROUP = b.dataset.g; render(); window.scrollTo(0, 0); });
+  $('#q').oninput = draw;
+  draw();
+}
+
+function draw() {
+  const q = ($('#q')?.value || '').trim().toLowerCase();
+  let list = q
+    ? ITEMS.filter(i => (i.title + ' ' + i.body + ' ' + (i.tip || '')).toLowerCase().includes(q))
+    : ITEMS.filter(i => (i.group || '').trim() === GROUP);
+
+  if (!list.length) {
+    return showEmpty('#content', '🔍', 'ไม่พบหัวข้อที่ค้นหา',
+      'ลองใช้คำสั้นลง หรือกดเมนู “ติดต่อ HR” เพื่อถามโดยตรง');
+  }
+
+  $('#content').innerHTML = list.map((i, n) => `
+    <div class="card">
+      <div class="eyebrow">${esc(i.group)} · ขั้นที่ ${esc(i.order)}</div>
+      <h2 style="font-size:17px;line-height:1.45;margin-bottom:10px">${esc(i.title)}</h2>
+      ${i.image ? `<img class="guide-img" src="img/${esc(i.image)}" alt="${esc(i.title)}" loading="lazy"
+                     onclick="openLb('img/${esc(i.image)}')">
+                   <div class="zoomhint">แตะที่ภาพเพื่อดูขนาดเต็ม</div>` : ''}
+      <div class="step-body">${nl2br(i.body)}</div>
+      ${i.tip ? `<div class="tipbox">💡 ${esc(i.tip)}</div>` : ''}
+    </div>`).join('') + `
+    <div class="card flat">
+      <div class="eyebrow">ยังติดอยู่?</div>
+      <p class="tiny" style="margin:0 0 10px">แคปหน้าจอที่มีปัญหาไว้ก่อน แล้วส่งเรื่องให้ HR — ภาพหน้าจอคือหลักฐานสำคัญที่ทำให้ HR แก้เวลาให้ได้</p>
+      <a class="btn sm" href="https://liff.line.me/${esc(CFGX.LIFF.hr)}?cat=problem">แจ้งปัญหาการใช้แอป</a>
+    </div>`;
+}
+
+function openLb(src) { $('#lbimg').src = src; $('#lb').classList.add('on'); }
+function closeLb() { $('#lb').classList.remove('on'); }
+$('#lb').onclick = e => { if (e.target.id === 'lb') closeLb(); };
+</script>
+</body>
+</html>

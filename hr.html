@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ติดต่อ HR | โก๋ในซอย HR Hub</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="inner">
+    <div class="badge">💬 ติดต่อ HR</div>
+    <h1 id="pageTitle">ส่งเรื่องถึง HR</h1>
+    <p id="pageSub">ทุกเรื่องมีคนอ่านจริง และมีกำหนดตอบกลับชัดเจน</p>
+  </div>
+</div>
+
+<div class="wrap pull-up">
+  <div id="content"><div class="loading"><div class="spinner"></div><div>กำลังเตรียมแบบฟอร์ม...</div></div></div>
+</div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+const CATS = [
+  { id:'consult',   label:'ขอคำปรึกษา / สอบถามทั่วไป', emoji:'💡', sla:2 },
+  { id:'leave',     label:'เรื่องการลา / วันหยุด',      emoji:'🌴', sla:1 },
+  { id:'payroll',   label:'เงินเดือน / OT / สลิป',      emoji:'💰', sla:2 },
+  { id:'welfare',   label:'สวัสดิการ / ประกันสังคม',    emoji:'🏥', sla:3 },
+  { id:'document',  label:'ขอเอกสาร / ใบรับรอง',        emoji:'📄', sla:3 },
+  { id:'schedule',  label:'ตารางงาน / ขอสลับกะ',        emoji:'🗓️', sla:1 },
+  { id:'problem',   label:'รายงานปัญหาในที่ทำงาน',      emoji:'⚠️', sla:1 },
+  { id:'complaint', label:'ร้องเรียน (เป็นความลับ)',    emoji:'🔒', sla:1 },
+  { id:'other',     label:'เรื่องอื่นๆ',                emoji:'✉️', sla:3 }
+];
+
+let CAT = 'consult';
+
+(async function () {
+  try {
+    await initLiff('hr');
+    const c = qs('cat'); if (CATS.some(x => x.id === c)) CAT = c;
+    if (qs('view') === 'my') return renderMyTickets();
+    renderForm();
+  } catch (e) { bootFail(e); }
+})();
+
+function renderForm() {
+  const cat = CATS.find(c => c.id === CAT);
+  const isSecret = CAT === 'complaint' || CAT === 'problem';
+  const preset = decodeURIComponent(qs('q') || '');
+  const ref = qs('ref');
+
+  $('#content').innerHTML = `
+    <div class="card">
+      <div class="field">
+        <label>เรื่องที่ต้องการติดต่อ</label>
+        <select id="cat">${CATS.map(c => `<option value="${c.id}" ${c.id === CAT ? 'selected' : ''}>${c.emoji} ${c.label}</option>`).join('')}</select>
+      </div>
+      <div id="secretBox"></div>
+      <div class="field">
+        <label for="subject">หัวข้อเรื่อง</label>
+        <div class="hint">สรุปสั้นๆ ให้ HR เข้าใจได้ทันที</div>
+        <input type="text" id="subject" maxlength="80" placeholder="เช่น ขอใบรับรองเงินเดือนเพื่อยื่นกู้">
+      </div>
+      <div class="field">
+        <label for="detail">รายละเอียด</label>
+        <div class="hint">ยิ่งเล่าละเอียด (วัน เวลา สถานที่ ผู้เกี่ยวข้อง) HR ยิ่งช่วยได้เร็ว</div>
+        <textarea id="detail" maxlength="2000" placeholder="อธิบายเรื่องที่ต้องการ...">${esc(preset)}</textarea>
+        <div class="tiny" id="counter" style="text-align:right;margin-top:4px">0 / 2000</div>
+      </div>
+      ${ref ? `<div class="alert info">อ้างอิงเรื่องเดิม: <strong>${esc(ref)}</strong></div>` : ''}
+      <div class="alert info">
+        ⚠️ <strong>เพื่อความปลอดภัยของข้อมูลส่วนบุคคล</strong> กรุณาอย่าพิมพ์เลขบัตรประชาชนเต็ม เลขบัญชีธนาคาร
+        หรือส่งภาพใบรับรองแพทย์ผ่านช่องทางนี้ — ให้ยื่นเอกสารตัวจริงที่ร้านแทน
+      </div>
+      <div id="msg"></div>
+      <button class="btn" id="send">ส่งเรื่องถึง HR</button>
+      <p class="tiny center" style="margin:12px 0 0">
+        กำหนดตอบกลับ: ภายใน <strong id="slaTxt">${cat.sla}</strong> วันทำการ<br>
+        เรื่องด่วนที่กระทบความปลอดภัย โทรหัวหน้าโดยตรง หรือสายด่วนกระทรวงแรงงาน 1506
+      </p>
+    </div>
+
+    <button class="btn ghost" onclick="renderMyTickets()">📬 ดูเรื่องที่เคยส่ง</button>
+  `;
+
+  $('#cat').onchange = e => { CAT = e.target.value; renderForm(); };
+  const d = $('#detail');
+  const upd = () => $('#counter').textContent = `${d.value.length} / 2000`;
+  d.oninput = upd; upd();
+  $('#send').onclick = submit;
+  drawSecret(isSecret);
+}
+
+function drawSecret(show) {
+  if (!show) { $('#secretBox').innerHTML = '<input type="hidden" id="privacy" value="normal">'; return; }
+  $('#secretBox').innerHTML = `
+    <div class="field">
+      <label>ระดับการเปิดเผยตัวตน</label>
+      <div class="hint">ร้านมีนโยบายห้ามตอบโต้ผู้ร้องเรียนโดยสุจริตทุกกรณี</div>
+      <div class="radio-group" id="privBox">
+        <label class="radio on"><input type="radio" name="priv" value="hr_only" checked>
+          <div><div class="t">เฉพาะ HR และฝ่ายบริหารเห็นชื่อ (แนะนำ)</div>
+          <div class="d">ไม่ผ่านหัวหน้าสาขา และ HR ติดต่อกลับคุณได้โดยตรง</div></div></label>
+        <label class="radio"><input type="radio" name="priv" value="anonymous">
+          <div><div class="t">ไม่ระบุตัวตนเลย</div>
+          <div class="d">ระบบไม่บันทึกชื่อและบัญชี LINE ของคุณ — แลกกับการที่ HR ติดต่อกลับไม่ได้ และไม่มีการแจ้งผลรายบุคคล</div></div></label>
+        <label class="radio"><input type="radio" name="priv" value="normal">
+          <div><div class="t">เปิดเผยตามปกติ</div>
+          <div class="d">HR และหัวหน้าที่เกี่ยวข้องเห็นชื่อ เหมาะกับเรื่องทั่วไปที่ไม่ละเอียดอ่อน</div></div></label>
+      </div>
+      <input type="hidden" id="privacy" value="hr_only">
+    </div>`;
+  $$('#privBox input').forEach(r => r.onchange = () => {
+    $$('#privBox .radio').forEach(x => x.classList.remove('on'));
+    r.closest('.radio').classList.add('on');
+    $('#privacy').value = r.value;
+  });
+}
+
+async function submit() {
+  const btn = $('#send'), msg = $('#msg');
+  const subject = $('#subject').value.trim();
+  const detail  = $('#detail').value.trim();
+  const privacy = $('#privacy')?.value || 'normal';
+  msg.innerHTML = '';
+
+  if (!subject) { msg.innerHTML = '<div class="alert err">กรุณากรอกหัวข้อเรื่อง</div>'; return; }
+  if (detail.length < 5) { msg.innerHTML = '<div class="alert err">กรุณาอธิบายรายละเอียดเพิ่มอีกนิด</div>'; return; }
+
+  btn.disabled = true; btn.textContent = 'กำลังส่ง...';
+  const r = await api('ticket_create', { category: CAT, subject, detail, privacy });
+  btn.disabled = false; btn.textContent = 'ส่งเรื่องถึง HR';
+
+  if (!r.ok) { msg.innerHTML = `<div class="alert err">${esc(r.message || 'ส่งไม่สำเร็จ')}</div>`; return; }
+  renderSuccess(r);
+}
+
+function renderSuccess(r) {
+  const anon = r.privacy === 'anonymous';
+  $('#content').innerHTML = `
+    <div class="card center">
+      <div style="font-size:52px;line-height:1;margin-bottom:8px">✅</div>
+      <h2 style="margin-bottom:4px">HR รับเรื่องแล้ว</h2>
+      <p class="muted" style="margin:0 0 16px">เราจะดำเนินการให้เร็วที่สุด</p>
+      <div style="text-align:left">
+        <div class="kv"><span class="k">รหัสเรื่อง</span><span class="v" style="color:var(--primary)">${esc(r.ticketId)}</span></div>
+        <div class="kv"><span class="k">กำหนดตอบกลับ</span><span class="v">ภายใน ${esc(r.sla)} วันทำการ</span></div>
+      </div>
+      <div class="alert ${anon ? 'info' : 'ok'}" style="margin-top:16px;text-align:left">
+        ${anon
+          ? '🔒 เรื่องนี้ส่งแบบ <strong>ไม่ระบุตัวตน</strong> ระบบจึงไม่บันทึกชื่อของคุณ และ HR ติดต่อกลับไม่ได้<br><strong>กรุณาจดรหัสเรื่องไว้</strong> เพื่อใช้อ้างอิงหากต้องการสอบถามด้วยตนเอง'
+          : 'คำตอบจาก HR จะส่งกลับมาในแชทไลน์นี้ และดูย้อนหลังได้จากปุ่ม “ติดตามเรื่องของฉัน”'}
+      </div>
+    </div>
+    <button class="btn ghost" onclick="renderMyTickets()">📬 ดูเรื่องที่เคยส่ง</button>
+    <button class="btn" style="margin-top:10px" onclick="liff.isInClient()?liff.closeWindow():history.back()">กลับหน้าแชท</button>`;
+  window.scrollTo(0, 0);
+}
+
+async function renderMyTickets() {
+  $('#pageTitle').textContent = 'เรื่องที่ส่งถึง HR';
+  $('#pageSub').textContent = 'ติดตามสถานะและคำตอบย้อนหลัง';
+  showLoading('#content');
+  const r = await api('my_tickets');
+  if (!r.ok) return showError('#content', r.message, true);
+  const list = r.tickets || [];
+
+  const back = `<button class="btn" style="margin-top:12px" onclick="location.href=location.pathname">✍️ ส่งเรื่องใหม่</button>`;
+
+  if (!list.length) {
+    $('#content').innerHTML = `<div class="card"><div class="empty"><div class="ico">📭</div>
+      <div class="strong">ยังไม่เคยส่งเรื่องถึง HR</div>
+      <div class="tiny" style="margin-top:6px">มีอะไรสงสัยหรือไม่สบายใจ ส่งมาได้ทุกเรื่อง</div></div></div>${back}`;
+    return;
+  }
+
+  $('#content').innerHTML = list.map(t => {
+    const done = String(t.status).includes('เสร็จ') || String(t.status).includes('ตอบ');
+    return `<div class="card flat">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:6px">
+        <span class="tiny">${esc(t.ticketId)}</span>
+        <span class="tag ${done ? 'green' : 'gold'}">${esc(t.status)}</span>
+      </div>
+      <div class="strong" style="font-size:15px;line-height:1.45">${esc(t.subject)}</div>
+      <div class="tiny" style="margin-top:4px">${esc(t.category)} • ส่งเมื่อ ${esc(String(t.createdAt).slice(0, 10))}</div>
+      ${t.reply ? `<div style="margin-top:11px;padding:12px 14px;background:#F2F7F4;border-radius:10px;border-left:3px solid var(--primary)">
+        <div class="eyebrow" style="margin-bottom:4px">คำตอบจาก HR</div>
+        <div style="font-size:13.5px;line-height:1.7">${nl2br(t.reply)}</div></div>`
+        : `<div class="tiny" style="margin-top:9px;color:var(--warn)">⏳ รอ HR ดำเนินการ • กำหนด ${esc(t.slaDue || '-')}</div>`}
+    </div>`;
+  }).join('') + back;
+  window.scrollTo(0, 0);
+}
+</script>
+</body>
+</html>

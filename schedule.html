@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ตารางงาน | โก๋ในซอย HR Hub</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="inner">
+    <div class="badge">🗓️ ตารางงาน</div>
+    <h1>ตารางงานของฉัน</h1>
+    <p id="sub">กะที่คุณต้องเข้า พร้อมเวลาและสาขา</p>
+  </div>
+</div>
+
+<div class="wrap pull-up">
+  <div id="meBox" class="card flat" style="margin-bottom:12px"></div>
+  <div id="content"><div class="loading"><div class="spinner"></div><div>กำลังโหลดตารางงาน...</div></div></div>
+</div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+let MINE = [], TEAM = [], SHIFTS = [], VIEW = 'list';
+let CUR = new Date(Date.now() + 7 * 3600e3);   // เดือนที่กำลังดู (เวลาไทย)
+
+(async function () {
+  try {
+    await initLiff('schedule');
+    renderMe('#meBox');
+    $('#sub').textContent = (ME.nickname || ME.fullName) + ' • ' + (ME.branch || '');
+    const r = await api('schedule', { from: iso(addM(CUR, -1)), to: iso(addM(CUR, 2)) });
+    if (!r.ok) return showError('#content', r.message, true);
+    MINE = r.mine || []; TEAM = r.team || []; SHIFTS = r.shifts || [];
+    render();
+  } catch (e) { bootFail(e); }
+})();
+
+const iso = d => new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+const addM = (d, n) => { const x = new Date(d); x.setMonth(x.getMonth() + n, 1); return x; };
+
+function render() {
+  const upcoming = MINE.filter(s => s.date >= todayISO());
+  const next = upcoming[0];
+
+  let html = '';
+
+  /* --- กะถัดไป --- */
+  html += `<div class="card" style="background:linear-gradient(135deg,#0F5132,#157347);color:#fff;border:0">
+    <div style="font-size:11px;font-weight:700;letter-spacing:.06em;opacity:.7;margin-bottom:6px">กะถัดไปของคุณ</div>
+    ${next ? `
+      <div style="font-size:22px;font-weight:700;line-height:1.3">${esc(next.shiftName)}</div>
+      <div style="font-size:14px;opacity:.9;margin-top:4px">
+        ${esc(thDay(next.date))} ${esc(thDate(next.date, true))}
+      </div>
+      <div style="font-size:14px;opacity:.9;margin-top:2px">
+        ⏰ ${esc(next.start || '-')} – ${esc(next.end || '-')}${next.branch ? '  •  📍 ' + esc(next.branch) : ''}
+      </div>
+      ${next.note ? `<div style="font-size:12.5px;margin-top:8px;background:rgba(255,255,255,.14);padding:8px 11px;border-radius:9px">📌 ${esc(next.note)}</div>` : ''}
+    ` : `<div style="font-size:17px;font-weight:600">ยังไม่มีกะที่กำหนดไว้</div>
+         <div style="font-size:13px;opacity:.85;margin-top:4px">หากคิดว่าไม่ถูกต้อง แจ้งหัวหน้ากะได้เลย</div>`}
+  </div>`;
+
+  /* --- สลับมุมมอง --- */
+  html += `<div class="chips" style="margin-top:4px">
+    <button class="chip ${VIEW === 'list' ? 'active' : ''}" data-v="list">📋 รายการ</button>
+    <button class="chip ${VIEW === 'cal' ? 'active' : ''}" data-v="cal">📅 ปฏิทิน</button>
+    ${TEAM.length ? `<button class="chip ${VIEW === 'team' ? 'active' : ''}" data-v="team">👥 ทีม</button>` : ''}
+  </div><div id="viewBox"></div>`;
+
+  /* --- ★ ปฏิทินมือถือ : แทนการส่งข้อความเตือนกะ --- */
+  html += `<div class="card" style="margin-top:14px;border:1.5px solid var(--accent);background:#FDF9EF">
+    <div class="eyebrow">ให้มือถือเตือนกะให้เอง</div>
+    <p class="muted" style="margin:0 0 4px;font-size:13.5px">
+      เพิ่มตารางกะเข้าปฏิทินในเครื่องครั้งเดียว แล้วโทรศัพท์จะเตือนคุณเองล่วงหน้า
+      <strong>12 ชั่วโมง</strong> และอีกครั้ง <strong>1 ชั่วโมง</strong> ก่อนเข้ากะ</p>
+    <p class="tiny" style="margin:0 0 10px">เมื่อ HR แก้ตารางกะ ปฏิทินจะอัปเดตตามเองภายในไม่กี่ชั่วโมง ไม่ต้องตั้งใหม่</p>
+    <button class="btn" id="calBtn" style="background:#8A6D1F">📅 เพิ่มลงปฏิทินมือถือ</button>
+    <div id="calBox"></div>
+  </div>`;
+
+  /* --- ปุ่มลัด --- */
+  html += `<div class="card flat" style="margin-top:14px">
+    <div class="eyebrow">ต้องการเปลี่ยนแปลง?</div>
+    <div class="btn-row" style="margin-top:8px">
+      <a class="btn sm ghost" href="https://liff.line.me/${esc(CFGX.LIFF.hr)}?cat=schedule">🔄 ขอสลับกะ</a>
+      <a class="btn sm ghost" href="https://liff.line.me/${esc(CFGX.LIFF.hr)}?cat=leave">🌴 แจ้งลา</a>
+    </div>
+    <p class="tiny" style="margin:10px 0 0">การขอสลับกะต้องได้รับอนุมัติจากหัวหน้ากะก่อนจึงจะมีผล</p>
+  </div>`;
+
+  $('#content').innerHTML = html;
+  $$('.chips .chip').forEach(b => b.onclick = () => { VIEW = b.dataset.v; render(); });
+  $('#calBtn').onclick = setupCalendar;
+  drawView();
+  if (qs('tab') === 'cal') setTimeout(setupCalendar, 400);
+}
+
+/* =============================================================
+ * ปฏิทินกะงาน — หัวใจของการเตือนกะแบบไม่ใช้โควตาข้อความ
+ * ============================================================= */
+let ICS_URL = '';
+async function setupCalendar() {
+  const box = $('#calBox');
+  const btn = $('#calBtn');
+  if (!ICS_URL) {
+    btn.disabled = true; btn.textContent = 'กำลังสร้างลิงก์...';
+    const r = await api('ics');
+    btn.disabled = false; btn.textContent = '📅 เพิ่มลงปฏิทินมือถือ';
+    if (!r.ok || !r.url) {
+      box.innerHTML = `<div class="alert err" style="margin-top:10px">${esc(r.message || 'ยังตั้งค่าไม่เสร็จ กรุณาแจ้ง HR')}</div>`;
+      return;
+    }
+    ICS_URL = r.url;
+  }
+  const webcal = ICS_URL.replace(/^https?:/, 'webcal:');
+  box.innerHTML = `
+    <div class="divider"></div>
+    <div class="eyebrow">iPhone / iPad</div>
+    <a class="btn sm" href="${esc(webcal)}">เพิ่มลงปฏิทิน iPhone</a>
+    <p class="tiny" style="margin:6px 0 0">กดปุ่มด้านบน แล้วกด “ติดตาม” (Subscribe) เมื่อเครื่องถาม<br>
+    ถ้าปุ่มไม่ทำงาน ให้คัดลอกลิงก์ด้านล่าง แล้วไปที่ ตั้งค่า → แอปพลิเคชัน → ปฏิทิน → บัญชี → เพิ่มบัญชี → อื่นๆ → เพิ่มปฏิทินที่ติดตาม</p>
+
+    <div class="divider"></div>
+    <div class="eyebrow">Android</div>
+    <p class="tiny" style="margin:0 0 8px">คัดลอกลิงก์ด้านล่าง แล้วเปิด <strong>calendar.google.com</strong> ในเบราว์เซอร์ (โหมดคอมพิวเตอร์)<br>
+    ไปที่ “ปฏิทินอื่นๆ” → กด + → <strong>จาก URL</strong> → วางลิงก์ → เพิ่มปฏิทิน<br>
+    จากนั้นตารางจะขึ้นในแอปปฏิทินของเครื่องเอง</p>
+    <button class="btn ghost sm" id="copyIcs">📋 คัดลอกลิงก์ปฏิทิน</button>
+
+    <div class="alert info" style="margin-top:12px">
+      🔒 ลิงก์นี้เป็นของคุณคนเดียว มีรหัสลับอยู่ในลิงก์ <strong>อย่าส่งต่อให้ผู้อื่น</strong>
+    </div>`;
+  $('#copyIcs').onclick = async () => {
+    try { await navigator.clipboard.writeText(ICS_URL); toast('คัดลอกลิงก์แล้ว'); }
+    catch (e) { prompt('คัดลอกลิงก์นี้', ICS_URL); }
+  };
+}
+
+function drawView() {
+  const box = $('#viewBox');
+  if (VIEW === 'list') return drawList(box);
+  if (VIEW === 'cal')  return drawCalendar(box);
+  return drawTeam(box);
+}
+
+function drawList(box) {
+  const list = MINE.filter(s => s.date >= todayISO()).slice(0, 45);
+  if (!list.length) { box.innerHTML = `<div class="card"><div class="empty"><div class="ico">🌙</div><div class="strong">ยังไม่มีตารางล่วงหน้า</div></div></div>`; return; }
+  box.innerHTML = `<div class="card">${list.map(s => {
+    const off = !s.start && !s.end;
+    return `<div class="shift-row">
+      <div class="shift-bar" style="background:${off ? '#D8DEDB' : esc(s.color)}"></div>
+      <div class="shift-date"><div class="dd">${esc(thDay(s.date))}</div><div class="mm">${esc(thDate(s.date))}</div></div>
+      <div class="shift-info">
+        <div class="nm" style="${off ? 'color:var(--sub)' : ''}">${esc(s.shiftName)}</div>
+        <div class="tm">${off ? '—' : esc((s.start || '') + ' – ' + (s.end || ''))}${s.branch ? ' • ' + esc(s.branch) : ''}</div>
+        ${s.note ? `<div class="tm" style="color:var(--danger)">📌 ${esc(s.note)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function drawCalendar(box) {
+  const y = CUR.getFullYear(), m = CUR.getMonth();
+  const first = new Date(y, m, 1), start = first.getDay();
+  const days = new Date(y, m + 1, 0).getDate();
+  const map = {}; MINE.forEach(s => map[s.date] = s);
+
+  let cells = '';
+  for (let i = 0; i < start; i++) cells += '<div class="day blank"></div>';
+  for (let d = 1; d <= days; d++) {
+    const key = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const s = map[key], isToday = key === todayISO();
+    const off = s && !s.start && !s.end;
+    cells += `<div class="day ${isToday ? 'today' : ''}">
+      <div class="d">${d}</div>
+      ${s ? `<div class="s" style="background:${off ? '#B0B8B4' : esc(s.color)}">${esc(String(s.shiftCode || '').slice(0, 3))}</div>` : ''}
+    </div>`;
+  }
+
+  box.innerHTML = `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <button class="chip" id="prevM">‹</button>
+      <div class="strong">${TH_MF[m]} ${y + 543}</div>
+      <button class="chip" id="nextM">›</button>
+    </div>
+    <div class="week">${TH_DS.map(d => `<div class="dow">${d}</div>`).join('')}</div>
+    <div class="week">${cells}</div>
+    <div class="divider"></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      ${SHIFTS.map(s => `<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--sub)">
+        <span style="width:10px;height:10px;border-radius:3px;background:${esc(s.color || '#999')};display:inline-block"></span>
+        ${esc(s.shiftCode)} ${esc(s.label || s.name)}</div>`).join('')}
+    </div>
+  </div>`;
+
+  $('#prevM').onclick = () => { CUR = addM(CUR, -1); render(); };
+  $('#nextM').onclick = () => { CUR = addM(CUR, 1); render(); };
+}
+
+function drawTeam(box) {
+  const today = todayISO();
+  const days = [...new Set(TEAM.filter(t => t.date >= today).map(t => t.date))].sort().slice(0, 10);
+  if (!days.length) { box.innerHTML = `<div class="card"><div class="empty"><div class="ico">👥</div><div class="strong">ไม่มีข้อมูลตารางทีม</div></div></div>`; return; }
+  box.innerHTML = days.map(d => `
+    <div class="card">
+      <div class="eyebrow">${esc(thDay(d))} ${esc(thDate(d))}</div>
+      ${TEAM.filter(t => t.date === d).map(t => `
+        <div class="kv"><span class="k">${esc(t.name)}</span>
+        <span class="v" style="color:${esc(t.color)}">${esc(t.shiftName)} ${esc(t.start || '')}${t.end ? '–' + esc(t.end) : ''}</span></div>`).join('')}
+    </div>`).join('');
+}
+</script>
+</body>
+</html>

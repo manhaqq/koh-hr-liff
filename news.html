@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ประกาศและข่าวสาร | โก๋ในซอย HR Hub</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="inner">
+    <div class="badge">📢 ประกาศจาก HR</div>
+    <h1>ประกาศและข่าวสาร</h1>
+    <p id="sub">ข่าวสารภายในของทีมโก๋ในซอย</p>
+  </div>
+</div>
+
+<div class="wrap pull-up">
+  <div id="topArea"></div>
+  <div id="content"><div class="loading"><div class="spinner"></div><div>กำลังโหลดประกาศ...</div></div></div>
+</div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+let ITEMS = [], CAT = 'ทั้งหมด';
+
+(async function () {
+  try {
+    await initLiff('news');
+    $('#sub').textContent = (ME.nickname || ME.fullName) + ' • ' + (ME.branch || CFGX.ORG);
+    const r = await api('news');
+    if (!r.ok) return showError('#content', r.message, true);
+    ITEMS = r.items || [];
+
+    const deep = qs('id');
+    if (deep) {
+      const one = ITEMS.find(x => String(x.id) === deep);
+      if (one) return renderDetail(one);
+    }
+    renderList();
+  } catch (e) { bootFail(e); }
+})();
+
+function categories() {
+  const s = new Set(ITEMS.map(i => (i.category || 'ทั่วไป').trim()).filter(Boolean));
+  return ['ทั้งหมด', ...s];
+}
+
+function renderList() {
+  $('#topArea').innerHTML = `
+    <div class="search"><input type="text" id="q" placeholder="ค้นหาประกาศ..."></div>
+    <div class="chips" id="chips">
+      ${categories().map(c => `<button class="chip ${c === CAT ? 'active' : ''}" data-c="${esc(c)}">${esc(c)}</button>`).join('')}
+    </div>`;
+
+  $$('#chips .chip').forEach(b => b.onclick = () => { CAT = b.dataset.c; renderList(); });
+  $('#q').oninput = draw;
+  draw();
+}
+
+function draw() {
+  const q = ($('#q')?.value || '').trim().toLowerCase();
+  let list = ITEMS.filter(i => CAT === 'ทั้งหมด' || (i.category || 'ทั่วไป').trim() === CAT);
+  if (q) list = list.filter(i => (i.title + ' ' + (i.summary || '') + ' ' + (i.body || '')).toLowerCase().includes(q));
+
+  if (!list.length) return showEmpty('#content', '📭', 'ยังไม่มีประกาศในหมวดนี้', 'ลองเปลี่ยนหมวดหรือคำค้นหา');
+
+  $('#content').innerHTML = list.map((i, idx) => `
+    <div class="item" data-i="${ITEMS.indexOf(i)}">
+      <div class="meta">
+        ${i.pinned ? '<span class="pin">📌 ปักหมุด</span>' : ''}
+        <span class="tag">${esc(i.category || 'ทั่วไป')}</span>
+        <span>${esc(thDate(i.date))}</span>
+      </div>
+      <div class="title">${esc(i.title)}</div>
+      ${i.summary ? `<div class="excerpt">${esc(i.summary)}</div>` : ''}
+    </div>`).join('');
+
+  $$('#content .item').forEach(el => el.onclick = () => renderDetail(ITEMS[+el.dataset.i]));
+}
+
+function renderDetail(a) {
+  $('#topArea').innerHTML = `<button class="btn ghost sm" style="width:auto;padding:8px 14px;margin-bottom:12px" onclick="backToList()">← กลับหน้ารวม</button>`;
+  $('#content').innerHTML = `
+    <div class="card">
+      <div class="meta" style="display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--sub);margin-bottom:8px">
+        <span class="tag">${esc(a.category || 'ทั่วไป')}</span><span>${esc(thDate(a.date, true))}</span>
+      </div>
+      <h2 style="font-size:19px;line-height:1.45;margin-bottom:12px">${esc(a.title)}</h2>
+      ${a.imageUrl ? `<img src="${esc(a.imageUrl)}" alt="" style="border-radius:12px;margin-bottom:14px">` : ''}
+      <div style="font-size:14.5px;line-height:1.85;color:#33443B">${nl2br(a.body || a.summary || '')}</div>
+      ${a.fileUrl ? `<a class="btn ghost" style="margin-top:16px" href="${esc(a.fileUrl)}" target="_blank" rel="noopener">📎 เปิดไฟล์แนบ</a>` : ''}
+      ${a.linkUrl ? `<a class="btn" style="margin-top:10px" href="${esc(a.linkUrl)}" target="_blank" rel="noopener">เปิดลิงก์ที่เกี่ยวข้อง</a>` : ''}
+    </div>
+    <div class="card flat">
+      <p class="tiny" style="margin:0">มีข้อสงสัยเกี่ยวกับประกาศนี้? กดเมนู “ติดต่อ HR” ในหน้าแชท แล้วเลือก “ขอคำปรึกษา” ได้เลย</p>
+    </div>`;
+  window.scrollTo(0, 0);
+}
+
+function backToList() { renderList(); window.scrollTo(0, 0); }
+</script>
+</body>
+</html>
