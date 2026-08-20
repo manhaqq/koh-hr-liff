@@ -1,0 +1,305 @@
+/*******************************************************************
+ * โก๋ในซอย HR Hub — 05_Webhook.gs
+ * ประตูหลักที่ LINE ยิงเข้ามา + API ให้หน้า LIFF เรียก
+ *
+ * URL เดียวกันทำ 2 หน้าที่:
+ *   • LINE Webhook   → body มี { events: [...] }
+ *   • LIFF API       → body มี { api: "xxx", idToken: "..." }
+ *******************************************************************/
+
+function doPost(e) {
+  var out = { ok: false };
+  try {
+    var body = (e && e.postData && e.postData.contents) ? e.postData.contents : '{}';
+    var data = JSON.parse(body);
+
+    /* ★ ปุ่ม Verify ของ LINE ยิง body ที่ events เป็นอาเรย์ว่างมา
+       ตอบ 200 กลับทันทีโดยไม่แตะ Google Sheets เลย
+       สำคัญเพราะตอนกด Verify เรามักยังไม่ได้ใส่ Script Properties ครบ
+       ถ้าเผลอไปอ่านชีตแล้ว error ขึ้นมา Apps Script จะตอบเป็นหน้า error (302)
+       ทำให้ LINE ขึ้นว่า "The webhook returned an HTTP status code other than 200" */
+    if (data && data.events && data.events.length === 0) {
+      return json_({ ok: true, verify: true });
+    }
+
+    if (data && data.api) {           // ── เรียกจากหน้า LIFF
+      out = handleApi_(data);
+    } else if (data && data.events) { // ── เรียกจาก LINE
+      /*
+       * หมายเหตุด้านความปลอดภัย:
+       * LINE ส่งลายเซ็นมาใน HTTP header ชื่อ x-line-signature
+       * แต่ Google Apps Script ไม่เปิดให้ doPost อ่าน header ได้ จึงตรวจลายเซ็นตรงนี้ไม่ได้
+       *
+       * การป้องกันจริงของระบบนี้จึงอยู่ที่ 3 ชั้นแทน
+       *   1. URL ของ Web App เป็นสตริงสุ่มยาวที่เดาไม่ได้
+       *   2. ทุกคำสั่งที่แตะข้อมูลจริง ต้องเจอ lineUserId ในทะเบียนพนักงานที่สถานะ active เท่านั้น
+       *   3. หน้าเว็บ LIFF ทุกหน้าถูกบังคับให้ส่ง ID Token ไปให้ LINE ยืนยันก่อนเสมอ (ดู 06_WebApi.gs)
+       * ดังนั้นแม้มีคนยิง request ปลอมเข้ามา ก็ทำได้แค่ให้บอทตอบข้อความสาธารณะกลับไปเท่านั้น
+       * ไม่สามารถอ่านหรือแก้ไขข้อมูลพนักงานได้
+       *
+       * ถ้าต้องการตรวจลายเซ็นจริง ให้ย้าย Webhook ไปวางบน Cloudflare Workers หรือ Cloud Functions
+       */
+      var sig = (e.parameter && e.parameter.sig) ? e.parameter.sig : null;
+      if (sig !== null && !verifySignature_(body, sig)) {
+        console.warn('ลายเซ็นไม่ถูกต้อง — ปฏิเสธ request');
+        return json_({ ok: false });
+      }
+      data.events.forEach(function (ev) {
+        try { handleEvent_(ev); }
+        catch (err) { console.error('event error: ' + err + '\n' + (err.stack || '')); }
+      });
+      out = { ok: true };
+    }
+  } catch (err) {
+    console.error('doPost error: ' + err + '\n' + (err.stack || ''));
+    out = { ok: false, error: String(err) };
+  }
+  return json_(out);
+}
+
+function doGet(e) {
+  var p = (e && e.parameter) || {};
+
+  /* ---- ปฏิทินกะงาน (.ics) — หัวใจของการเตือนกะแบบ 0 บาท ----
+   * พนักงานสมัครรับปฏิทินนี้ครั้งเดียว จากนั้นโทรศัพท์ของเขา
+   * จะดึงตารางใหม่และเตือนเองทุกวัน ระบบไม่ต้องส่งข้อความเลย  */
+  if (p.ics) {
+    var code = String(p.ics).toUpperCase();
+    if (String(p.t || '') !== icsToken(code)) {
+      return ContentService.createTextOutput('unauthorized').setMimeType(ContentService.MimeType.TEXT);
+    }
+    var body = buildIcs_(code);
+    if (!body) return ContentService.createTextOutput('not found').setMimeType(ContentService.MimeType.TEXT);
+    return ContentService.createTextOutput(body).setMimeType(ContentService.MimeType.ICAL);
+  }
+
+  // ใช้ทดสอบว่า Web App เผยแพร่แล้ว
+  return json_({ ok: true, service: 'Koh Nai Soi HR Hub', time: now_() });
+}
+
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/* ================================================================
+ * ตัวจัดการ Event จาก LINE
+ * ================================================================ */
+function handleEvent_(ev) {
+  var userId     = ev.source && ev.source.userId;
+  var replyToken = ev.replyToken;
+
+  /* --- เก็บ groupId ไว้ตั้งค่ากลุ่ม HR --- */
+  if (ev.type === 'join' || (ev.type === 'message' && ev.source.type === 'group')) {
+    if (ev.type === 'message' && ev.message.type === 'text' &&
+        String(ev.message.text).trim() === '#groupid') {
+      reply(replyToken, { type: 'text', text: 'Group ID:\n' + ev.source.groupId });
+      return;
+    }
+    if (ev.type === 'join') {
+      reply(replyToken, { type: 'text',
+        text: 'เชื่อมต่อสำเร็จ ✅\nพิมพ์ #groupid เพื่อดู Group ID สำหรับตั้งค่าแจ้งเตือน HR' });
+      return;
+    }
+    return;   // ไม่ยุ่งกับข้อความอื่นในกลุ่ม
+  }
+
+  if (!userId) return;
+
+  /* --- เพิ่มเพื่อน --- */
+  if (ev.type === 'follow') {
+    var e0 = findEmployeeByUserId(userId);
+    if (isActive(e0)) {
+      grantAccess_(userId);
+      reply(replyToken, withQuickReply(flexWelcome(e0)));   // reply = ฟรี ไม่นับโควตา
+    } else {
+      revokeAccess_(userId);
+      reply(replyToken, flexVerifyPrompt());
+    }
+    audit(userId, 'FOLLOW', e0 ? e0.empCode : '', isActive(e0) ? 'พนักงานเดิมกลับมา' : 'ผู้ใช้ใหม่');
+    return;
+  }
+
+  /* --- บล็อก/ลบเพื่อน --- */
+  if (ev.type === 'unfollow') {
+    audit(userId, 'UNFOLLOW', '', 'ผู้ใช้บล็อกหรือลบบัญชี');
+    return;
+  }
+
+  /* --- ตรวจสิทธิ์ก่อนทำอย่างอื่น --- */
+  var emp = findEmployeeByUserId(userId);
+  if (!isActive(emp)) {
+    // อนุญาตคำสั่งพิเศษสำหรับหาตัว userId ตอนติดตั้ง
+    if (ev.type === 'message' && ev.message.type === 'text' &&
+        String(ev.message.text).trim() === '#myid') {
+      reply(replyToken, { type: 'text', text: 'LINE User ID ของคุณคือ\n' + userId });
+      return;
+    }
+    revokeAccess_(userId);
+    reply(replyToken, emp ? flexBlocked(String(emp.status).trim().toUpperCase()) : flexVerifyPrompt());
+    return;
+  }
+
+  /* --- Postback --- */
+  if (ev.type === 'postback') { handlePostback_(ev, emp); return; }
+
+  /* --- ข้อความ --- */
+  if (ev.type === 'message') {
+    if (ev.message.type === 'text') { handleText_(ev, emp); return; }
+    reply(replyToken, withQuickReply({ type: 'text',
+      text: 'ตอนนี้ระบบรับเฉพาะข้อความตัวอักษรค่ะ 🙏\n\n⚠️ เพื่อความปลอดภัยของข้อมูลส่วนบุคคล กรุณาอย่าส่งรูปบัตรประชาชนหรือใบรับรองแพทย์ผ่านแชทนี้ ให้ยื่นเอกสารตัวจริงที่ร้านแทน' }));
+    return;
+  }
+}
+
+/* ================================================================
+ * ข้อความตัวอักษร
+ * ================================================================ */
+function handleText_(ev, emp) {
+  var text = String(ev.message.text || '').trim();
+  var rt   = ev.replyToken;
+
+  /* คำสั่งลัด */
+  var shortcuts = {
+    '#myid':     function () { reply(rt, { type: 'text', text: 'LINE User ID ของคุณคือ\n' + ev.source.userId }); },
+    'เมนู':      function () { reply(rt, withQuickReply(flexTopFaq())); },
+    'ติดต่อhr':  function () { reply(rt, flexHrMenu()); },
+    'ติดต่อ hr': function () { reply(rt, flexHrMenu()); },
+    'กะวันนี้':  function () { replyTodayShift_(rt, emp); },
+    'ตารางงาน':  function () { replyTodayShift_(rt, emp); },
+    'ประกาศ':    function () { replyLatestNews_(rt, emp); },
+    'คู่มือ':    function () { reply(rt, flexHandbookMenu()); },
+    'สวัสดิการ': function () { reply(rt, flexHandbookMenu()); },
+    'แอป':       function () { reply(rt, flexAppGuideMenu()); },
+    'hrcloud':   function () { reply(rt, flexAppGuideMenu()); },
+    'ลงเวลา':    function () { reply(rt, flexAppGuideMenu()); },
+    'แสกน':      function () { reply(rt, flexAppGuideMenu()); },
+    'สแกน':      function () { reply(rt, flexAppGuideMenu()); },
+    'ปฏิทิน':    function () { reply(rt, flexCalendarHelp(emp)); },
+    'ผังองค์กร': function () { reply(rt, flexOrgLink(emp)); },
+    'แผนผัง':    function () { reply(rt, flexOrgLink(emp)); },
+    'หัวหน้า':   function () { reply(rt, flexOrgLink(emp)); },
+    'องค์กร':    function () { reply(rt, flexOrgLink(emp)); },
+    'รายงาน':    function () { reply(rt, flexReportsLink(emp)); },
+    'สรุป':      function () { reply(rt, flexReportsLink(emp)); }
+  };
+  var key = text.toLowerCase().replace(/\s+/g, '');
+  var alt = text.toLowerCase();
+  if (shortcuts[key]) { shortcuts[key](); logQuery_(emp, text, 'shortcut'); return; }
+  if (shortcuts[alt]) { shortcuts[alt](); logQuery_(emp, text, 'shortcut'); return; }
+
+  /* ค้นหา FAQ */
+  var r = searchFaq(text);
+  if (r.best) {
+    reply(rt, withQuickReply(flexFaqAnswer(r.best)));
+    logQuery_(emp, text, 'faq:' + r.best.id);
+    return;
+  }
+  if (r.suggestions.length) {
+    reply(rt, withQuickReply(flexFaqSuggest(r.suggestions, text)));
+    logQuery_(emp, text, 'suggest');
+    return;
+  }
+  reply(rt, withQuickReply(flexFaqNotFound(text)));
+  logQuery_(emp, text, 'notfound');
+}
+
+/** บันทึกคำถามที่ตอบไม่ได้ เพื่อให้ HR เอาไปเพิ่มเป็น FAQ */
+function logQuery_(emp, text, result) {
+  if (result === 'notfound' || result === 'suggest') {
+    audit(emp ? emp.empCode : '', 'FAQ_MISS', result, text);
+  }
+}
+
+/* ================================================================
+ * Postback
+ * ================================================================ */
+function handlePostback_(ev, emp) {
+  var rt = ev.replyToken;
+  var p  = parseQuery_(ev.postback.data || '');
+  var a  = p.action;
+
+  if (a === 'hr_menu')     { clearBadge(ev.source.userId, 'hr'); reply(rt, flexHrMenu()); return; }
+  if (a === 'appguide')    { reply(rt, flexAppGuideMenu()); return; }
+  if (a === 'org')         { reply(rt, flexOrgLink(emp)); return; }
+  if (a === 'reports')     { reply(rt, flexReportsLink(emp)); return; }
+  if (a === 'faq_top')     { reply(rt, withQuickReply(flexTopFaq())); return; }
+  if (a === 'handbook')    { reply(rt, flexHandbookMenu()); return; }
+  if (a === 'today_shift') { replyTodayShift_(rt, emp); return; }
+  if (a === 'news')        { clearBadge(ev.source.userId, 'news'); replyLatestNews_(rt, emp); return; }
+
+  if (a === 'faq') {
+    var f = getFaqById(p.id);
+    reply(rt, withQuickReply(f ? flexFaqAnswer(f) : flexFaqNotFound('')));
+    return;
+  }
+
+  if (a === 'faq_rate') {
+    audit(emp.empCode, 'FAQ_RATE', p.id, p.v === '1' ? 'ตรงคำถาม' : 'ไม่ตรง');
+    reply(rt, { type: 'text', text: 'ขอบคุณสำหรับฟีดแบ็กค่ะ 🙏' });
+    return;
+  }
+
+  if (a === 'my_tickets') {
+    reply(rt, flexMyTickets(myTickets(emp.empCode, ev.source.userId)));
+    return;
+  }
+
+  if (a === 'to_hr') {
+    var q = p.q ? decodeURIComponent(p.q) : '';
+    reply(rt, {
+      type: 'text',
+      text: 'กดปุ่มด้านล่างเพื่อส่งเรื่องถึง HR ได้เลยค่ะ',
+      quickReply: { items: [
+        { type: 'action', action: fxUri_('📝 เขียนเรื่องถึง HR', liffUrl(CFG.liff.hr, 'cat=consult' + (q ? '&q=' + encodeURIComponent(q) : ''))) },
+        { type: 'action', action: fxPost_('❓ ดูคำถามยอดฮิต', 'action=faq_top') }
+      ]}
+    });
+    return;
+  }
+
+  reply(rt, withQuickReply({ type: 'text', text: 'ไม่พบคำสั่งนี้ค่ะ ลองเลือกจากเมนูด้านล่างนะคะ' }));
+}
+
+/* ================================================================
+ * ตัวช่วยตอบ
+ * ================================================================ */
+function replyTodayShift_(rt, emp) {
+  var shifts = getScheduleFor(emp.empCode, addDaysStr_(-1), addDaysStr_(9));
+  reply(rt, withQuickReply(flexTodayShift(emp, shifts)));
+}
+
+function replyLatestNews_(rt, emp) {
+  var list = getAnnouncements(emp, 5);
+  if (!list.length) {
+    reply(rt, withQuickReply({ type: 'text', text: 'ยังไม่มีประกาศใหม่ในตอนนี้ค่ะ 📭' }));
+    return;
+  }
+  var bubbles = list.slice(0, 5).map(function (a) { return flexAnnouncement(a).contents; });
+  reply(rt, withQuickReply(fx_('ประกาศล่าสุด', { type: 'carousel', contents: bubbles })));
+}
+
+function parseQuery_(s) {
+  var o = {};
+  String(s).split('&').forEach(function (kv) {
+    var i = kv.indexOf('=');
+    if (i < 0) { o[kv] = ''; return; }
+    o[kv.slice(0, i)] = kv.slice(i + 1);
+  });
+  return o;
+}
+
+/* ================================================================
+ * เปิด / ปิด สิทธิ์การเห็นเมนู  (หัวใจของการกันคนนอก)
+ * ================================================================ */
+function grantAccess_(userId) {
+  try { if (CFG.richMenuMain) linkRichMenuToUser(userId, CFG.richMenuMain); }
+  catch (e) { console.error('grantAccess_ ' + e); }
+}
+
+function revokeAccess_(userId) {
+  try {
+    if (CFG.richMenuGuest) linkRichMenuToUser(userId, CFG.richMenuGuest);
+    else unlinkRichMenuFromUser(userId);
+  } catch (e) { console.error('revokeAccess_ ' + e); }
+}
