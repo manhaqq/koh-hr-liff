@@ -3,12 +3,98 @@
  * ชั้นเข้าถึงข้อมูล Google Sheets (อ่าน/เขียน/ค้นหา)
  *******************************************************************/
 
-function ss_() { return SpreadsheetApp.openById(CFG.ssId); }
+var SS_MEMO_    = null;   /* อ็อบเจ็กต์เหล่านี้อยู่แค่ในการทำงานรอบเดียว จึงไม่มีปัญหาข้อมูลเก่าค้าง */
+var SHEET_MEMO_ = {};
+
+function ss_() {
+  if (!SS_MEMO_) SS_MEMO_ = SpreadsheetApp.openById(CFG.ssId);
+  return SS_MEMO_;
+}
 
 function sheet_(name) {
+  if (SHEET_MEMO_[name]) return SHEET_MEMO_[name];
   var sh = ss_().getSheetByName(name);
   if (!sh) throw new Error('ไม่พบชีต "' + name + '" — กรุณารัน initDatabase() ก่อน');
+  SHEET_MEMO_[name] = sh;
   return sh;
+}
+
+/* =================================================================
+ *  ชั้นแคชของตาราง
+ * -----------------------------------------------------------------
+ *  เดิม readTable อ่านทั้งแท็บใหม่ทุกครั้งที่ถูกเรียก การเปิดหน้าเดียว
+ *  อาจอ่านแท็บเดิมซ้ำหลายรอบ ซึ่งเป็นสาเหตุหลักที่ระบบช้า
+ *
+ *  แคช 2 ชั้น
+ *    1. memo ในหน่วยความจำ  — กันการอ่านซ้ำภายในการทำงานรอบเดียว
+ *    2. CacheService        — กันการอ่านซ้ำข้ามคำขอ (นานสุด 5 นาที)
+ *
+ *  ★ ล้างแคชเมื่อไหร่ — สำคัญมาก
+ *    HR แก้ข้อมูลในชีตโดยตรง ซึ่ง "ไม่ผ่านโค้ดนี้" ถ้าอาศัยแค่การล้างตอนเขียน
+ *    ข้อมูลที่ HR เพิ่งแก้จะยังไม่ขึ้นให้พนักงานเห็น จึงต้องล้าง 3 ทาง
+ *      ก. ตอนโค้ดเขียนข้อมูล        → bumpTableVersion_ ใน appendRow/updateRow
+ *      ข. ตอน HR แก้ชีตด้วยมือ      → ทริกเกอร์ onEditInvalidateCache (09_Triggers.js)
+ *      ค. อายุแคชหมดเอง             → กันพลาดถ้าสองข้อบนไม่ทำงาน
+ * ================================================================= */
+
+var TABLE_MEMO_   = {};
+var HEADER_MEMO_  = {};
+var TABLE_TTL_    = 300;        /* วินาที */
+var CACHE_CHUNK_  = 30000;      /* ตัวอักษร — CacheService รับ 100KB/คีย์
+                                   ภาษาไทย 1 ตัว = 3 ไบต์ 30000 ตัวจึงไม่เกิน 90KB */
+
+function tableVersion_(name) {
+  try {
+    var c = CacheService.getScriptCache(), k = 'ver_' + name;
+    var v = c.get(k);
+    if (!v) { v = String(new Date().getTime()); c.put(k, v, 21600); }
+    return v;
+  } catch (e) { return '0'; }
+}
+
+/** บอกว่าตารางนี้เปลี่ยนแล้ว — แคชชุดเก่าจะถูกมองข้ามและหมดอายุไปเอง */
+function bumpTableVersion_(name) {
+  delete TABLE_MEMO_[name];
+  delete HEADER_MEMO_[name];
+  try { CacheService.getScriptCache().put('ver_' + name, String(new Date().getTime()), 21600); } catch (e) {}
+}
+
+/** ล้างแคชทุกตาราง — ใช้ตอนกู้ระบบหรือหลังนำเข้าข้อมูลก้อนใหญ่ */
+function clearAllTableCache() {
+  TABLE_MEMO_ = {}; HEADER_MEMO_ = {};
+  try {
+    var keys = [];
+    for (var k in SHEETS) keys.push('ver_' + SHEETS[k]);
+    CacheService.getScriptCache().removeAll(keys);
+  } catch (e) {}
+}
+
+function cacheGetBig_(key) {
+  try {
+    var c = CacheService.getScriptCache();
+    var n = parseInt(c.get(key + '_n'), 10);
+    if (!n) return null;
+    var keys = [];
+    for (var i = 0; i < n; i++) keys.push(key + '_' + i);
+    var got = c.getAll(keys), s = '';
+    for (var j = 0; j < n; j++) {
+      if (got[key + '_' + j] == null) return null;   /* ชิ้นใดชิ้นหนึ่งหาย = ใช้ไม่ได้ทั้งชุด */
+      s += got[key + '_' + j];
+    }
+    return JSON.parse(s);
+  } catch (e) { return null; }
+}
+
+function cachePutBig_(key, obj, ttl) {
+  try {
+    var s = JSON.stringify(obj);
+    var n = Math.ceil(s.length / CACHE_CHUNK_);
+    if (n > 20) return;                              /* ใหญ่เกินกว่าจะคุ้มแคช */
+    var parts = {};
+    for (var i = 0; i < n; i++) parts[key + '_' + i] = s.substr(i * CACHE_CHUNK_, CACHE_CHUNK_);
+    parts[key + '_n'] = String(n);
+    CacheService.getScriptCache().putAll(parts, ttl);
+  } catch (e) {}
 }
 
 /**
@@ -45,7 +131,26 @@ function countFilled_(row) {
   return n;
 }
 
-function readTable(name) {
+/**
+ * อ่านทั้งตารางเป็น array ของ object — ผ่านแคช
+ * @param {string}  name   ชื่อแท็บ
+ * @param {boolean} fresh  true = ข้ามแคช บังคับอ่านจากชีตจริง
+ */
+function readTable(name, fresh) {
+  if (!fresh && TABLE_MEMO_[name]) return TABLE_MEMO_[name];
+
+  var key = 't_' + name + '_' + tableVersion_(name);
+  if (!fresh) {
+    var hit = cacheGetBig_(key);
+    if (hit) { TABLE_MEMO_[name] = hit; return hit; }
+  }
+  var out = readTableRaw_(name);
+  TABLE_MEMO_[name] = out;
+  cachePutBig_(key, out, TABLE_TTL_);
+  return out;
+}
+
+function readTableRaw_(name) {
   var sh = sheet_(name);
   var last = sh.getLastRow();
   if (last < 2) return [];
@@ -72,6 +177,7 @@ function readTable(name) {
 }
 
 function headerIndex_(name) {
+  if (HEADER_MEMO_[name]) return HEADER_MEMO_[name];
   var sh = sheet_(name);
   var rows = Math.min(5, Math.max(1, sh.getLastRow()));
   var vals = sh.getRange(1, 1, rows, Math.max(1, sh.getLastColumn())).getDisplayValues();
@@ -80,6 +186,7 @@ function headerIndex_(name) {
   var idx = {};
   vals[h].forEach(function (x, i) { if (String(x).trim()) idx[String(x).trim()] = i + 1; });
   idx._headRow = h + 1;
+  HEADER_MEMO_[name] = idx;
   return idx;
 }
 
@@ -93,6 +200,7 @@ function appendRow(name, obj) {
     return (obj[k] === undefined || obj[k] === null) ? '' : obj[k];
   });
   sh.appendRow(row);
+  bumpTableVersion_(name);
   return sh.getLastRow();
 }
 
@@ -100,9 +208,12 @@ function appendRow(name, obj) {
 function updateRow(name, rowNumber, patch) {
   var sh  = sheet_(name);
   var idx = headerIndex_(name);
+  /* เขียนทีละเซลล์ตามเดิมโดยตั้งใจ — บางแท็บมีคอลัมน์สรุปที่เป็นสูตร
+     ถ้าอ่านทั้งแถวแล้วเขียนกลับด้วย setValues สูตรจะถูกทับด้วยค่าคงที่ */
   Object.keys(patch).forEach(function (k) {
     if (idx[k]) sh.getRange(rowNumber, idx[k]).setValue(patch[k]);
   });
+  bumpTableVersion_(name);
 }
 
 /* ================= พนักงาน ================= */
@@ -110,7 +221,9 @@ function updateRow(name, rowNumber, patch) {
 function findEmployeeByUserId(userId) {
   if (!userId) return null;
   var cache = CacheService.getScriptCache();
-  var key   = 'emp_' + userId;
+  /* ผูกคีย์กับเวอร์ชันของตาราง Employees ด้วย มิฉะนั้นตอน HR สั่งพักงานหรือตัดสิทธิ์
+     คนนั้นจะยังใช้ระบบได้ต่ออีกถึง 3 นาทีจนกว่าแคชแถวเดิมจะหมดอายุ */
+  var key   = 'emp_' + userId + '_' + tableVersion_(SHEETS.EMPLOYEES);
   var hit   = cache.get(key);
   if (hit) { try { return JSON.parse(hit); } catch (e) {} }
   var rows = readTable(SHEETS.EMPLOYEES);
@@ -124,6 +237,9 @@ function findEmployeeByUserId(userId) {
 }
 
 function clearEmployeeCache(userId) {
+  /* คีย์มีเวอร์ชันของตารางอยู่ด้วย การเด้งเวอร์ชันจึงทิ้งแคชของทุกคนพร้อมกัน
+     ซึ่งเป็นสิ่งที่ต้องการอยู่แล้วเวลาทะเบียนพนักงานเปลี่ยน */
+  bumpTableVersion_(SHEETS.EMPLOYEES);
   try { CacheService.getScriptCache().remove('emp_' + userId); } catch (e) {}
 }
 

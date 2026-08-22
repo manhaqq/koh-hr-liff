@@ -8,7 +8,8 @@
 
 function installTriggers() {
   var HANDLERS = ['refreshNewsBadge', 'dailyHrEmail', 'autoPublishAnnouncements',
-                  'weeklyHealthCheck', 'pushWeeklySchedule', 'pushTomorrowReminder', 'dailyHrDigest'];
+                  'weeklyHealthCheck', 'pushWeeklySchedule', 'pushTomorrowReminder', 'dailyHrDigest',
+                  'onEditInvalidateCache'];
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (HANDLERS.indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t);
   });
@@ -29,12 +30,19 @@ function installTriggers() {
   ScriptApp.newTrigger('weeklyHealthCheck').timeBased()
     .onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(7).inTimezone(CFG.TZ).create();
 
+  // ทุกครั้งที่มีคนแก้ชีต — ล้างแคชของแท็บนั้นทันที
+  // ต้องเป็นทริกเกอร์แบบติดตั้ง (ไม่ใช่ onEdit ธรรมดา) เพราะ onEdit ธรรมดา
+  // ทำงานในโหมดสิทธิ์จำกัด ซึ่งเรียก CacheService ไม่ได้เสมอไป
+  ScriptApp.newTrigger('onEditInvalidateCache')
+    .forSpreadsheet(CFG.ssId).onEdit().create();
+
   alert_('ติดตั้งงานอัตโนมัติแล้ว ✅',
     'ทั้ง 4 งานนี้ไม่ใช้โควตาข้อความ LINE เลย\n\n' +
     '• ทุกวัน 08:00 — เผยแพร่ประกาศตามเวลา + ติดจุดแดงบนเมนู\n' +
     '• ทุกวัน 09:00 — อีเมลสรุปงานค้างถึง HR\n' +
     '• เสาร์ 18:00 — ติดจุดแดงแจ้งตารางสัปดาห์หน้า\n' +
-    '• จันทร์ 07:00 — ตรวจสุขภาพระบบ\n\n' +
+    '• จันทร์ 07:00 — ตรวจสุขภาพระบบ\n' +
+    '• ทุกครั้งที่แก้ชีต — ล้างแคชให้ข้อมูลใหม่ขึ้นทันที\n\n' +
     'ปิด/เปิดแต่ละรายการได้ที่ชีต Settings');
 }
 
@@ -184,3 +192,20 @@ function pushTomorrowReminder() {
 /** ฟังก์ชันเดิม — คงชื่อไว้เพื่อไม่ให้ trigger เก่าพัง */
 function pushWeeklySchedule() { refreshNewsBadge(); }
 function dailyHrDigest()      { dailyHrEmail(); }
+
+
+/**
+ * ล้างแคชของแท็บที่เพิ่งถูกแก้
+ *
+ * HR แก้ข้อมูลในชีตโดยตรงเป็นเรื่องปกติของระบบนี้ ซึ่งไม่ผ่านโค้ดฝั่งเขียนเลย
+ * ถ้าไม่มีตัวนี้ ข้อมูลที่ HR เพิ่งแก้จะไม่ขึ้นให้พนักงานเห็นจนกว่าแคชจะหมดอายุ
+ * ซึ่งเป็นอาการที่หาสาเหตุยากมาก ("แก้แล้วทำไมยังเป็นของเก่า")
+ *
+ * ห้ามใส่งานหนักในนี้ — ทริกเกอร์ onEdit ทำงานทุกครั้งที่มีการพิมพ์ในชีต
+ */
+function onEditInvalidateCache(e) {
+  try {
+    var name = e && e.range && e.range.getSheet().getName();
+    if (name) bumpTableVersion_(name);
+  } catch (err) { /* ห้ามปล่อย error ออกไป จะไปรบกวนการแก้ชีตของ HR */ }
+}
