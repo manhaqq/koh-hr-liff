@@ -1,0 +1,308 @@
+<title>วาระประชุม HR Hub</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --ground:#F9F1E8;
+  --surface:#FFFCF6;
+  --sunk:#F2E6D6;
+  --ink:#312215;
+  --ink-2:#6B4A2B;
+  --muted:#8C7358;
+  --rule:#E4D3BC;
+  --accent:#DBA66B;
+  --accent-ink:#96631A;
+  --done:#146C43;
+  --done-bg:#E6F1E8;
+  --risk:#B3261E;
+  --risk-bg:#FBE9E7;
+
+  --display:'Kanit',system-ui,sans-serif;
+  --body:'IBM Plex Sans Thai',system-ui,sans-serif;
+
+  --measure:63ch;
+  --pad:clamp(20px,5vw,64px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#1A120B; --surface:#241811; --sunk:#2E2016;
+    --ink:#F4EADD; --ink-2:#E4C79C; --muted:#B0987C; --rule:#3D2C1E;
+    --accent:#DBA66B; --accent-ink:#E9BC80;
+    --done:#7DBE93; --done-bg:#1B2E22;
+    --risk:#F0938B; --risk-bg:#33191A;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#1A120B; --surface:#241811; --sunk:#2E2016;
+  --ink:#F4EADD; --ink-2:#E4C79C; --muted:#B0987C; --rule:#3D2C1E;
+  --accent:#DBA66B; --accent-ink:#E9BC80;
+  --done:#7DBE93; --done-bg:#1B2E22;
+  --risk:#F0938B; --risk-bg:#33191A;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--body); font-size:16.5px; line-height:1.78;
+  -webkit-font-smoothing:antialiased;
+}
+.page{max-width:840px; margin:0 auto; padding:var(--pad) var(--pad) 96px}
+
+/* ─── masthead ─── */
+.mast{border-bottom:2px solid var(--ink); padding-bottom:22px; margin-bottom:38px}
+.kicker{
+  font-family:var(--display); font-weight:600; font-size:12px;
+  letter-spacing:.18em; text-transform:uppercase; color:var(--accent-ink);
+  display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;
+}
+.kicker::after{content:''; flex:1; height:1px; background:var(--rule); min-width:24px}
+h1{
+  font-family:var(--display); font-weight:700;
+  font-size:clamp(34px,6.4vw,54px); line-height:1.14; letter-spacing:-.015em;
+  margin:0 0 14px; text-wrap:balance;
+}
+.thesis{
+  font-size:clamp(17px,2.2vw,20px); line-height:1.68; color:var(--ink-2);
+  max-width:var(--measure); margin:0; font-weight:500;
+}
+
+/* ─── metrics ─── */
+.metrics{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+  gap:1px; background:var(--rule); border:1px solid var(--rule);
+  margin:38px 0 52px;
+}
+.metric{background:var(--surface); padding:20px 18px}
+.metric b{
+  display:block; font-family:var(--display); font-weight:700;
+  font-size:clamp(26px,4.4vw,34px); line-height:1.05; color:var(--ink);
+  font-variant-numeric:tabular-nums; letter-spacing:-.02em;
+}
+.metric span{display:block; font-size:12.5px; color:var(--muted); margin-top:7px; line-height:1.45}
+
+/* ─── agenda items ─── */
+section{margin:0 0 52px; scroll-margin-top:20px}
+.head{display:flex; gap:16px; align-items:baseline; margin-bottom:18px}
+.num{
+  font-family:var(--display); font-weight:700; font-size:14px;
+  color:var(--ground); background:var(--ink-2);
+  min-width:30px; height:30px; border-radius:50%;
+  display:inline-flex; align-items:center; justify-content:center;
+  flex:0 0 auto; font-variant-numeric:tabular-nums; translate:0 -2px;
+}
+h2{
+  font-family:var(--display); font-weight:600;
+  font-size:clamp(21px,3.2vw,27px); line-height:1.3; margin:0;
+  letter-spacing:-.01em; text-wrap:balance;
+}
+p{max-width:var(--measure); margin:0 0 16px}
+.lede{color:var(--ink-2); font-weight:500}
+strong{font-weight:600; color:var(--ink)}
+
+/* ─── the 0-baht panel: the idea the whole system rests on ─── */
+.pivot{
+  background:var(--surface); border:1px solid var(--rule);
+  border-left:5px solid var(--accent); padding:clamp(20px,3.5vw,32px); margin:24px 0;
+}
+.pivot h3{
+  font-family:var(--display); font-weight:600; font-size:17px;
+  margin:0 0 18px; color:var(--ink);
+}
+.swap{display:grid; grid-template-columns:1fr; gap:14px}
+@media(min-width:620px){ .swap{grid-template-columns:1fr auto 1fr; align-items:center} }
+.swap-side{padding:16px 18px; border:1px solid var(--rule); background:var(--sunk)}
+.swap-side.win{background:var(--done-bg); border-color:transparent}
+.swap-lab{font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:600; margin-bottom:8px}
+.swap-side b{display:block; font-family:var(--display); font-weight:700; font-size:23px; line-height:1.2; font-variant-numeric:tabular-nums}
+.swap-side.win b{color:var(--done)}
+.swap-side em{display:block; font-style:normal; font-size:13.5px; color:var(--muted); margin-top:7px; line-height:1.5}
+.swap-arrow{font-family:var(--display); font-weight:600; color:var(--accent-ink); text-align:center; font-size:20px}
+
+/* ─── lists ─── */
+ul.rows{list-style:none; padding:0; margin:0}
+ul.rows li{
+  display:grid; grid-template-columns:auto 1fr; gap:14px;
+  padding:14px 0; border-top:1px solid var(--rule); align-items:baseline;
+}
+ul.rows li:last-child{border-bottom:1px solid var(--rule)}
+.tick{
+  font-family:var(--display); font-size:11px; font-weight:600; letter-spacing:.06em;
+  padding:3px 9px; border-radius:3px; white-space:nowrap; translate:0 -1px;
+}
+.t-done{background:var(--done-bg); color:var(--done)}
+.t-next{background:var(--sunk); color:var(--ink-2)}
+.t-risk{background:var(--risk-bg); color:var(--risk)}
+ul.rows li div{max-width:var(--measure)}
+ul.rows li p{margin:5px 0 0; font-size:14.5px; color:var(--muted); line-height:1.62}
+
+/* ─── phases ─── */
+.phase{border-top:1px solid var(--rule); padding:16px 0; display:grid; gap:4px}
+.phase:last-of-type{border-bottom:1px solid var(--rule)}
+.phase-top{display:flex; gap:12px; align-items:baseline; flex-wrap:wrap}
+.phase-name{font-family:var(--display); font-weight:600; font-size:16.5px}
+.phase-when{font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums}
+.phase p{margin:0; font-size:14.5px; color:var(--muted)}
+
+/* ─── decisions ─── */
+.decide{
+  background:var(--surface); border:1px solid var(--rule);
+  padding:20px 22px; margin-bottom:14px;
+}
+.decide h3{font-family:var(--display); font-weight:600; font-size:16.5px; margin:0 0 8px}
+.decide p{font-size:14.5px; color:var(--muted); margin:0}
+.decide p + p{margin-top:8px}
+.decide .ask{color:var(--accent-ink); font-weight:600}
+
+.closer{
+  margin-top:60px; padding-top:26px; border-top:2px solid var(--ink);
+  font-family:var(--display); font-weight:500;
+  font-size:clamp(17px,2.6vw,21px); line-height:1.6; max-width:var(--measure);
+  color:var(--ink-2); text-wrap:balance;
+}
+</style>
+
+<div class="page">
+
+  <header class="mast">
+    <div class="kicker">ร้านโก๋ในซอย · วาระประชุม · สิงหาคม 2569</div>
+    <h1>HR Hub บนไลน์<br>ของร้านโก๋ในซอย</h1>
+    <p class="thesis">
+      ศูนย์สื่อสารฝ่ายบุคคลที่พนักงานทุกคนเปิดใช้ได้จากไลน์ที่มีอยู่แล้ว
+      ไม่ต้องลงแอปใหม่ ไม่ต้องจำรหัสผ่าน และไม่มีค่าใช้จ่ายรายเดือน
+    </p>
+  </header>
+
+  <div class="metrics">
+    <div class="metric"><b>60</b><span>พนักงานที่ระบบดูแล</span></div>
+    <div class="metric"><b>฿0</b><span>ค่าระบบต่อเดือน</span></div>
+    <div class="metric"><b>8</b><span>บริการในเมนูเดียว</span></div>
+    <div class="metric"><b>24 ชม.</b><span>เปิดดูข้อมูลได้ตลอด</span></div>
+  </div>
+
+  <section>
+    <div class="head"><span class="num">1</span><h2>ระบบนี้ทำอะไรให้ร้าน</h2></div>
+    <p class="lede">
+      พนักงานกดเมนูในไลน์แล้วเห็นสี่อย่างที่เคยต้องเดินมาถาม HR ทุกวัน
+    </p>
+    <ul class="rows">
+      <li><span class="tick t-done">ประกาศ</span><div>ข่าวสารและประกาศจากร้าน<p>ประกาศออกครั้งเดียว ถึงพนักงานทุกคนพร้อมกัน ไม่ต้องไล่บอกทีละกะ</p></div></li>
+      <li><span class="tick t-done">คู่มือ</span><div>คู่มือพนักงานและสวัสดิการ<p>27 หัวข้อจากคู่มือฉบับจริง ค้นได้ ไม่ต้องพกเล่ม</p></div></li>
+      <li><span class="tick t-done">ตารางงาน</span><div>ตารางกะของตัวเอง<p>กดเพิ่มลงปฏิทินมือถือครั้งเดียว โทรศัพท์เตือนเข้ากะให้เองตลอดไป</p></div></li>
+      <li><span class="tick t-done">ติดต่อ HR</span><div>ส่งเรื่องถึงฝ่ายบุคคล<p>ลา ขอเอกสาร แจ้งปัญหา ร้องเรียน — ร้องเรียนแบบไม่เปิดเผยชื่อได้</p></div></li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="head"><span class="num">2</span><h2>หัวใจของระบบ: ทำไมถึงฟรีจริง</h2></div>
+    <p>
+      แพ็กเกจฟรีของ LINE ส่งข้อความหาพนักงานได้เดือนละ <strong>300 ข้อความ</strong>เท่านั้น
+      ถ้าแจ้งเตือนพนักงาน 60 คนตามปกติ จะใช้โควตาหมดภายใน 5 ครั้ง แล้วต้องจ่ายรายเดือน
+    </p>
+
+    <div class="pivot">
+      <h3>ระบบเราจึงไม่ส่งข้อความแจ้งเตือนเลย แต่ใช้ “จุดแดงบนเมนู” แทน</h3>
+      <div class="swap">
+        <div class="swap-side">
+          <div class="swap-lab">วิธีปกติ</div>
+          <b>5 ครั้ง / เดือน</b>
+          <em>ส่งข้อความหาพนักงาน 60 คน แล้วโควตาหมด ต้องเริ่มจ่ายค่าแพ็กเกจ</em>
+        </div>
+        <div class="swap-arrow">→</div>
+        <div class="swap-side win">
+          <div class="swap-lab">วิธีของเรา</div>
+          <b>ไม่จำกัด</b>
+          <em>สลับภาพเมนูให้ขึ้นจุดแดง พนักงานเห็นทันทีว่ามีเรื่องใหม่ ไม่เสียค่าอะไรเลย</em>
+        </div>
+      </div>
+    </div>
+
+    <p>
+      โควตา 300 ข้อความจึงถูกเก็บไว้ทั้งก้อน สำหรับ<strong>เหตุด่วนจริง ๆ</strong> เท่านั้น
+      เช่น ร้านปิดกะทันหัน หรือเหตุฉุกเฉินที่ต้องให้ทุกคนรู้ในนาทีนั้น
+    </p>
+  </section>
+
+  <section>
+    <div class="head"><span class="num">3</span><h2>สิ่งที่เพิ่งทำเสร็จรอบนี้</h2></div>
+    <ul class="rows">
+      <li><span class="tick t-done">เสร็จ</span><div>เปลี่ยนหน้าตาทั้งระบบให้ตรงกับแบรนด์ใหม่<p>เมนูในไลน์และหน้าเว็บทุกหน้าใช้โทนสีเดียวกันแล้ว พร้อมตรวจแล้วว่าตัวอักษรอ่านออกชัดทุกจุด</p></div></li>
+      <li><span class="tick t-done">เสร็จ</span><div>ปิดช่องโหว่ที่ทำให้ข้อมูลพนักงานรั่วได้<p>เดิมคนนอกที่มีแค่บัญชีไลน์ สามารถทำให้ข้อมูลติดต่อของพนักงานทั้ง 60 คนถูกส่งออกไปข้างนอกได้ ตอนนี้ปิดแล้ว</p></div></li>
+      <li><span class="tick t-done">เสร็จ</span><div>เริ่มสำรองฐานข้อมูลอัตโนมัติทุกสัปดาห์<p>เดิมไม่มีการสำรองข้อมูลเลย ทั้งที่กฎหมายแรงงานให้เก็บทะเบียนลูกจ้างอย่างน้อย 2 ปี</p></div></li>
+      <li><span class="tick t-done">เสร็จ</span><div>ทำให้ย้อนระบบกลับได้ถ้าอัปเดตแล้วมีปัญหา<p>กลับไปเวอร์ชันก่อนหน้าได้ในคำสั่งเดียว โดยพนักงานไม่รู้สึกว่ามีอะไรสะดุด</p></div></li>
+      <li><span class="tick t-done">เสร็จ</span><div>เริ่มแก้เรื่องความเร็ว<p>ลดการอ่านข้อมูลซ้ำซ้อน ซึ่งเป็นสาเหตุหลักที่หน้าจอโหลดช้า</p></div></li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="head"><span class="num">4</span><h2>สิ่งที่ตรวจพบ และยังไม่ได้แก้</h2></div>
+    <p class="lede">
+      รอบนี้มีการตรวจระบบทั้งหมดอย่างละเอียด พบประเด็นรวม 122 ข้อ
+      สามข้อที่กระทบงานประจำวันมากที่สุดคือ
+    </p>
+    <ul class="rows">
+      <li><span class="tick t-risk">สำคัญ</span><div>HR ทำงานบนมือถือไม่ได้เลยแม้แต่ข้อเดียว<p>ทุกอย่างต้องเปิดตารางข้อมูลบนคอมพิวเตอร์ การตอบเรื่องพนักงานหนึ่งเรื่องใช้ 10 ขั้นตอน และต้องเลื่อนผ่านคอลัมน์ข้อมูลส่วนตัวของพนักงาน</p></div></li>
+      <li><span class="tick t-risk">สำคัญ</span><div>แก้ตารางกะแล้วหายเงียบ<p>ถ้าหัวหน้ากะแก้ตารางแล้วไม่ได้พิมพ์คำเฉพาะคำหนึ่งลงไปด้วย การแก้นั้นจะถูกลบทิ้งอัตโนมัติในรอบถัดไป โดยไม่มีคำเตือนและกู้คืนไม่ได้</p></div></li>
+      <li><span class="tick t-risk">สำคัญ</span><div>ทุกอย่างอยู่ในบัญชี Google ส่วนตัวบัญชีเดียว<p>ถ้าบัญชีนั้นถูกระงับ หรือคนที่ถือบัญชีลาออก ร้านจะเข้าถึงข้อมูลพนักงานทั้งหมดไม่ได้อีกเลย และไม่มีช่องทางกู้คืน</p></div></li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="head"><span class="num">5</span><h2>แผนงานถัดไป</h2></div>
+    <div class="phase">
+      <div class="phase-top"><span class="phase-name">หน้าจอจัดการสำหรับ HR และหัวหน้ากะ</span><span class="phase-when">คุ้มค่าที่สุด</span></div>
+      <p>ตอบเรื่องพนักงาน อนุมัติใบลา และแก้ตารางกะได้จากมือถือ พร้อมแยกสิทธิ์ว่าใครเห็นอะไรได้บ้าง หลังจากนั้นค่อยถอนสิทธิ์แก้ตารางข้อมูลดิบออกจากคนส่วนใหญ่</p>
+    </div>
+    <div class="phase">
+      <div class="phase-top"><span class="phase-name">ทำให้เร็วขึ้นหลายเท่า</span><span class="phase-when">ทำคู่ขนานได้</span></div>
+      <p>ย้ายข้อมูลที่ไม่ค่อยเปลี่ยน เช่น คู่มือและคำถามที่พบบ่อย ไปเสิร์ฟจากที่ที่เร็วกว่าเดิมประมาณ 50 เท่า และลดจำนวนครั้งที่หน้าเว็บต้องคุยกับเซิร์ฟเวอร์</p>
+    </div>
+    <div class="phase">
+      <div class="phase-top"><span class="phase-name">แนบรูปในประกาศได้</span><span class="phase-when">รอการอนุมัติ</span></div>
+      <p>HR ส่งรูปเข้าไลน์ของร้านแล้วเลือกว่าจะแนบกับประกาศไหน ไม่ต้องยุ่งกับลิงก์หรือไฟล์เอง</p>
+    </div>
+    <div class="phase">
+      <div class="phase-top"><span class="phase-name">แบบทดสอบความเข้าใจ</span><span class="phase-when">รอการอนุมัติ</span></div>
+      <p>วัดความเข้าใจนโยบายร้าน วิสัยทัศน์องค์กร และการใช้แอป myHR Cloud เก็บคะแนนรายบุคคล และดูภาพรวมของทีมได้</p>
+    </div>
+    <div class="phase">
+      <div class="phase-top"><span class="phase-name">คู่มือการใช้งาน 3 เล่ม</span><span class="phase-when">ทำเป็นลำดับสุดท้าย</span></div>
+      <p>สำหรับพนักงาน สำหรับ HR และผู้จัดการ และสำหรับผู้ดูแลระบบ — ต้องเขียนหลังงานข้างบนเสร็จ ไม่งั้นคู่มือจะผิดตั้งแต่วันที่ส่งมอบ</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="num">6</span><h2>เรื่องที่ขอมติในที่ประชุมวันนี้</h2></div>
+
+    <div class="decide">
+      <h3>ตั้งเจ้าของสำรองของระบบ</h3>
+      <p>ตอนนี้ชีตข้อมูล สคริปต์ และไฟล์สำรอง อยู่ในบัญชี Google ส่วนตัวบัญชีเดียวทั้งหมด ซึ่งไม่มีผู้ดูแลระดับองค์กรและกู้คืนไม่ได้</p>
+      <p class="ask">ขอมติ: เพิ่มบัญชีที่สองเป็นเจ้าของร่วม หรือย้ายไปใช้ Google Workspace ของร้าน</p>
+    </div>
+
+    <div class="decide">
+      <h3>ใครมีสิทธิ์แก้ข้อมูลอะไรได้บ้าง</h3>
+      <p>ตอนนี้ใครที่แก้ตารางข้อมูลได้ จะเห็นข้อมูลติดต่อของพนักงานทุกคน อ่านเรื่องร้องเรียนที่เป็นความลับได้ และสั่งตัดสิทธิ์พนักงานได้ด้วย</p>
+      <p class="ask">ขอมติ: ตกลงว่าหัวหน้ากะควรเห็นได้แค่แผนกตัวเอง และ HR เห็นทั้งหมด</p>
+    </div>
+
+    <div class="decide">
+      <h3>รูปที่แนบในประกาศจะเป็นลิงก์สาธารณะ</h3>
+      <p>ด้วยวิธีที่ประหยัดที่สุด รูปที่แนบจะเปิดดูได้โดยใครก็ตามที่ได้ลิงก์ไป จึงห้ามถ่ายเอกสารที่มีข้อมูลส่วนบุคคลมาแนบเด็ดขาด</p>
+      <p class="ask">ขอมติ: ยอมรับเงื่อนไขนี้ และกำหนดเป็นระเบียบให้ HR ทราบ</p>
+    </div>
+
+    <div class="decide">
+      <h3>เก็บข้อมูลย้อนหลังนานเท่าไหร่</h3>
+      <p>กฎหมายแรงงานกำหนดให้เก็บทะเบียนลูกจ้างอย่างน้อย 2 ปี แต่ยังไม่ได้กำหนดว่าเรื่องที่พนักงานส่งถึง HR และประวัติการลา จะเก็บไว้นานแค่ไหน</p>
+      <p class="ask">ขอมติ: กำหนดระยะเวลาเก็บของแต่ละประเภทข้อมูล</p>
+    </div>
+  </section>
+
+  <p class="closer">
+    ระบบนี้ทำงานอยู่แล้วและไม่มีค่าใช้จ่ายรายเดือน
+    งานรอบต่อไปไม่ใช่การเพิ่มของใหม่ให้พนักงาน แต่คือการทำให้ฝ่ายบุคคลทำงานประจำวันได้จากมือถือ
+    และปิดความเสี่ยงเรื่องการเข้าถึงข้อมูลก่อนที่ระบบจะโตไปมากกว่านี้
+  </p>
+
+</div>
