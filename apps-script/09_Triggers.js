@@ -95,10 +95,18 @@ function autoPublishAnnouncements() {
 function dailyHrEmail() {
   if (String(setting('HR_EMAIL_ENABLED', 'TRUE')).toUpperCase() !== 'TRUE') return;
   var today = todayStr_();
-  var tk = readTable(SHEETS.TICKETS).filter(function (t) { return String(t.status).indexOf('เสร็จ') < 0; });
+  /* ★ ใช้ isTicketOpen / isLeavePending ตัวเดียวกับที่รายงานและแดชบอร์ดใช้
+     เดิมที่นี่หา indexOf('เสร็จ') เอง เรื่องที่ HR ตอบไปแล้ว (สถานะ 'ตอบแล้ว')
+     จึงถูกนับเป็นค้างและเกินกำหนดทุกเช้าไม่มีวันจบ — อีเมลที่ร้องหมาป่าทุกวัน
+     สุดท้ายไม่มีใครอ่าน แล้วเรื่องด่วนจริงก็จมไปกับมันด้วย */
+  var allTk = readTable(SHEETS.TICKETS);
+  var tk = allTk.filter(function (t) { return isTicketOpen(t.status); });
   var overdue = tk.filter(function (t) { return String(t.slaDue).trim() && String(t.slaDue).trim() < today; });
-  var newToday = tk.filter(function (t) { return String(t.createdAt).slice(0, 10) === today; });
-  var lv = readTable(SHEETS.LEAVE).filter(function (l) { return String(l.status).indexOf('รอ') >= 0; });
+  /* นับ "เรื่องใหม่วันนี้" จากทุกเรื่อง ไม่ใช่เฉพาะที่ยังค้าง
+     ไม่งั้นเรื่องที่เข้ามาเช้านี้และ HR ตอบจบไปแล้วจะหายไปจากยอด
+     ทั้งที่มันคือปริมาณงานที่ทีมทำไปจริง ๆ ในวันนั้น */
+  var newToday = allTk.filter(function (t) { return String(t.createdAt).slice(0, 10) === today; });
+  var lv = readTable(SHEETS.LEAVE).filter(function (l) { return isLeavePending(l.status); });
   var emps = readTable(SHEETS.EMPLOYEES);
   var notVerified = emps.filter(function (e) { return isActive(e) && !String(e.lineUserId).trim(); });
 

@@ -154,25 +154,39 @@ function reportTickets() {
   var t = readTable(SHEETS.TICKETS);
   var today = todayStr_();
   var m = {}, order = [];
-  var overdue = 0, open = 0;
+  var overdue = 0, open = 0, answered = 0, closed = 0;
   t.forEach(function (x) {
     var c = String(x.category || 'ไม่ระบุ').trim();
-    if (!m[c]) { m[c] = { total: 0, open: 0, done: 0, late: 0 }; order.push(c); }
+    if (!m[c]) { m[c] = { total: 0, open: 0, answered: 0, closed: 0, late: 0 }; order.push(c); }
     m[c].total++;
-    var st = String(x.status).trim();
-    var isOpen = st !== 'closed' && st !== 'ปิดแล้ว';
-    if (isOpen) { m[c].open++; open++; } else m[c].done++;
-    if (isOpen && String(x.slaDue).trim() && String(x.slaDue).trim() < today) { m[c].late++; overdue++; }
+
+    /* ★ ตัดสิน "ค้าง/ไม่ค้าง" ด้วย isTicketOpen ตัวเดียวกับที่อีเมลเช้าและแดชบอร์ดใช้
+       เดิมที่นี่เทียบกับ 'closed' และ 'ปิดแล้ว' ซึ่งไม่มีโค้ดไหนเขียนลงชีตเลยสักครั้ง
+       รายงานฉบับนี้จึงบอกว่า 100% ของเรื่องยังไม่ปิด ทุกครั้งที่กด ตั้งแต่วันแรก
+       แยกคอลัมน์ "ตอบแล้ว" กับ "ปิดแล้ว" ออกจากกัน เพราะสองอย่างนี้ไม่เท่ากัน
+       และ HR ต้องเห็นว่ามีกี่เรื่องที่ตอบไปแล้วแต่ยังไม่ได้กดปิด */
+    var st = normalizeTicketStatus(x.status);
+    if (isTicketOpen(x.status)) { m[c].open++; open++; }
+    else if (st === TICKET_STATUS.ANSWERED) { m[c].answered++; answered++; }
+    else { m[c].closed++; closed++; }
+
+    if (isTicketOpen(x.status) && String(x.slaDue).trim() && String(x.slaDue).trim() < today) {
+      m[c].late++; overdue++;
+    }
   });
   var out = order.map(function (c) {
-    return [c, m[c].total, m[c].open, m[c].done, m[c].late];
+    return [c, m[c].total, m[c].open, m[c].answered, m[c].closed, m[c].late];
   });
-  out.push(['รวม', t.length, open, t.length - open, overdue]);
+  out.push(['รวม', t.length, open, answered, closed, overdue]);
 
   writeReport_('รายงาน-เรื่องถึง HR', '💬 สรุปเรื่องถึง HR',
-    ['หมวด', 'ทั้งหมด', 'ยังไม่ปิด', 'ปิดแล้ว', 'เกินกำหนดตอบ'],
-    out, [26, 11, 12, 11, 15],
-    'เกินกำหนด = ยังไม่ปิด และเลยวันที่ในคอลัมน์ slaDue แล้ว · ' +
+    ['หมวด', 'ทั้งหมด', 'ยังค้าง', 'ตอบแล้ว', 'ปิดแล้ว', 'เกินกำหนดตอบ'],
+    out, [26, 11, 11, 11, 11, 15],
+    'ยังค้าง = ยังไม่ได้ตอบ (สถานะ "' + TICKET_STATUS.NEW + '" หรือ "' + TICKET_STATUS.WIP + '") · ' +
+    'ตอบแล้ว = ส่งคำตอบไปแล้วแต่ยังไม่ได้กดปิดเรื่อง · ' +
+    'เกินกำหนด = ยังค้าง และเลยวันที่ในคอลัมน์ slaDue แล้ว · ' +
+    'สถานะที่ระบบไม่รู้จักจะถูกนับเป็น "ยังค้าง" เพื่อไม่ให้เรื่องหายเงียบ — ' +
+    'ถ้าตัวเลขดูแปลก ให้กดเมนู 💬 เรื่องถึง HR > "แปลงคำสถานะเดิมให้ตรงกัน" · ' +
     'กำหนดเวลาตอบของแต่ละหมวดตั้งไว้ใน TICKET_CATEGORIES ของไฟล์ 00_Config.gs');
 }
 
@@ -188,19 +202,28 @@ function reportLeave() {
   rows.forEach(function (l) {
     var e = emp[String(l.empCode).trim().toUpperCase()] || {};
     var k = (e.dept || 'ไม่ระบุ') + '|' + (l.type || 'ไม่ระบุ');
-    if (!m[k]) { m[k] = { dept: e.dept || 'ไม่ระบุ', type: l.type || 'ไม่ระบุ', n: 0, days: 0, approved: 0 }; keys.push(k); }
+    if (!m[k]) { m[k] = { dept: e.dept || 'ไม่ระบุ', type: l.type || 'ไม่ระบุ',
+                          n: 0, days: 0, approved: 0, pending: 0 }; keys.push(k); }
     m[k].n++;
     m[k].days += Number(l.days) || 0;
-    if (String(l.status).trim() === 'approved') m[k].approved++;
+
+    /* ★ เดิมเทียบกับคำอังกฤษ 'approved' แต่ระบบเขียนคำไทยลงชีต
+       ช่อง "อนุมัติแล้ว" จึงเป็น 0 ตลอดกาล เว้นแต่ HR จะบังเอิญพิมพ์อังกฤษเอง
+       เพิ่มช่อง "รออนุมัติ" ด้วย เพราะนั่นคือตัวเลขที่ HR ต้องลงมือทำอะไรต่อ */
+    var st = normalizeLeaveStatus(l.status);
+    if (st === LEAVE_STATUS.APPROVED) m[k].approved++;
+    else if (st === LEAVE_STATUS.PENDING) m[k].pending++;
   });
   var out = keys.sort().map(function (k) {
-    return [m[k].dept, m[k].type, m[k].n, m[k].days, m[k].approved];
+    return [m[k].dept, m[k].type, m[k].n, m[k].days, m[k].approved, m[k].pending];
   });
 
   writeReport_('รายงาน-การลา', '🌴 สรุปการลาทั้งองค์กร',
-    ['แผนก', 'ประเภทการลา', 'จำนวนใบลา', 'รวมวันลา', 'อนุมัติแล้ว'],
-    out, [20, 22, 12, 11, 12],
-    'นับเฉพาะใบลาที่ยื่นผ่าน LINE เท่านั้น · ใบลาที่ยื่นในแอป myHR Cloud หรือกระดาษไม่รวมอยู่ในนี้');
+    ['แผนก', 'ประเภทการลา', 'จำนวนใบลา', 'รวมวันลา', 'อนุมัติแล้ว', 'รออนุมัติ'],
+    out, [20, 22, 12, 11, 12, 12],
+    'นับเฉพาะใบลาที่ยื่นผ่าน LINE เท่านั้น · ใบลาที่ยื่นในแอป myHR Cloud หรือกระดาษไม่รวมอยู่ในนี้ · ' +
+    'สถานะที่นับได้คือ "' + LEAVE_STATUS.PENDING + '" / "' + LEAVE_STATUS.APPROVED + '" / "' +
+    LEAVE_STATUS.REJECTED + '" — ถ้าพิมพ์คำอื่นจะไม่ถูกนับในสองช่องขวา');
 }
 
 /* ================================================================

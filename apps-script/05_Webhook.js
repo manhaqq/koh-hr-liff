@@ -219,7 +219,13 @@ function handlePostback_(ev, emp) {
   var p  = parseQuery_(ev.postback.data || '');
   var a  = p.action;
 
-  if (a === 'hr_menu')     { clearBadge(ev.source.userId, 'hr'); reply(rt, flexHrMenu()); return; }
+  /* ★ ห้ามล้างจุดแดง 'hr' ตรงนี้
+     flexHrMenu() เป็นแค่กระดานปุ่ม ไม่มีคำตอบของ HR อยู่ในนั้นเลย
+     ผู้ใช้ต้องกดต่ออีกทีเข้าหน้า "เรื่องของฉัน" ถึงจะได้อ่านคำตอบจริง
+     เดิมล้างที่นี่ = จุดแดงหายตั้งแต่ยังไม่เห็นอะไร และไม่มีสัญญาณที่สองอีกเลย
+     ทั้งที่จุดแดงคือช่องทางเดียวที่บอกว่า HR ตอบแล้ว (โหมด 0 บาท ไม่มี push)
+     จุดล้างที่ถูกต้องคือ API 'my_tickets' ใน 06_WebApi.js ซึ่งคืนคอลัมน์ reply จริง */
+  if (a === 'hr_menu')     { reply(rt, flexHrMenu()); return; }
   if (a === 'appguide')    { reply(rt, flexAppGuideMenu()); return; }
   if (a === 'org')         { reply(rt, flexOrgLink(emp)); return; }
   if (a === 'reports')     { reply(rt, flexReportsLink(emp)); return; }

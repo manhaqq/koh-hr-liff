@@ -48,19 +48,50 @@ function menuIdFor_(b) {
   return cfg('RICHMENU_ID_MAIN');
 }
 
-/** ติดจุดแดงให้พนักงานคนเดียว */
+/**
+ * ติดหรือปลดจุดแดงให้พนักงานคนเดียว
+ *
+ * ★ ลำดับสำคัญกว่าที่คิด: เรียก LINE ให้สำเร็จก่อน แล้วค่อยจดสถานะ
+ *   เดิมจด Properties ก่อนแล้วค่อยเรียก LINE ใน try/catch ที่กลืน error ทิ้ง
+ *   ถ้า LINE พลาด ระบบจะ "จำว่าทำสำเร็จ" ทั้งที่เมนูจริงไม่เปลี่ยน
+ *   ตอนติดจุดแดง = คนนั้นไม่มีวันรู้ว่า HR ตอบแล้ว และไม่มีโค้ดไหนลองซ้ำให้อีก
+ *   ตอนปลดจุดแดง = จุดแดงค้างบนเมนูถาวรจนกว่าจะรันเมนูซ่อมระบบ
+ *   ทำกลับด้าน: ถ้า LINE พลาด สถานะเดิมยังอยู่ ครั้งหน้าที่ผู้ใช้เปิดหน้านั้น
+ *   ระบบจะลองใหม่ให้เอง — ผิดพลาดแล้วซ่อมตัวเองได้ ดีกว่าผิดแล้วเงียบ
+ *
+ * @throws ถ้าเรียก LINE ไม่สำเร็จ — ตั้งใจให้เด้งขึ้นไป ผู้เรียกจะได้บอกความจริงกับ HR ได้
+ * @return {boolean} true = สถานะเปลี่ยนจริง, false = ไม่มีอะไรต้องเปลี่ยน
+ */
 function setBadge(userId, which, on) {
-  if (!userId) return;
-  var b = getBadges_(userId);
-  if (which === 'news') b.news = !!on;
-  if (which === 'hr')   b.hr   = !!on;
-  saveBadges_(userId, b);
-  try { linkRichMenuToUser(userId, menuIdFor_(b)); }
-  catch (e) { console.error('setBadge ' + userId + ': ' + e); }
+  if (!userId) return false;
+  var cur  = getBadges_(userId);
+  var next = { news: cur.news, hr: cur.hr };
+  if (which === 'news') next.news = !!on;
+  if (which === 'hr')   next.hr   = !!on;
+
+  /* ไม่มีอะไรเปลี่ยน = ไม่ต้องยิง LINE และไม่ต้องเขียน Properties
+     เปิดหน้าประกาศ 3 ครั้งเดิมยิง LINE 3 ครั้งเปล่า ๆ ครั้งละ 200–400 ms */
+  if (next.news === cur.news && next.hr === cur.hr) return false;
+
+  var menuId = menuIdFor_(next);
+  /* ยังไม่ได้สร้าง Rich Menu = ส่งจุดแดงไม่ได้เลย ต้องบอกดัง ๆ ไม่ใช่คืน false เงียบ ๆ
+     ถ้าคืนเงียบ ผู้เรียกจะเข้าใจว่า "ไม่มีอะไรต้องเปลี่ยน" แล้วรายงานว่าสำเร็จ */
+  if (!menuId) throw new Error('ยังไม่ได้สร้าง Rich Menu (RICHMENU_ID_MAIN ว่าง) — แจ้งเตือนด้วยจุดแดงไม่ได้');
+  linkRichMenuToUser(userId, menuId);   /* สำเร็จก่อน */
+  saveBadges_(userId, next);            /* ค่อยจด */
+  return true;
 }
 
-/** เคลียร์จุดแดง (เรียกตอนพนักงานเปิดหน้านั้นจริง) */
-function clearBadge(userId, which) { setBadge(userId, which, false); }
+/**
+ * ปลดจุดแดง (เรียกตอนพนักงานเปิดหน้าที่มีเนื้อหาจริงแล้วเท่านั้น)
+ * ตัวนี้ห้าม throw — ถูกเรียกกลางทางของ API ที่ต้องคืนข้อมูลให้ผู้ใช้
+ * ปลดจุดแดงไม่สำเร็จเป็นเรื่องเล็ก แต่หน้าเว็บพังทั้งหน้าเป็นเรื่องใหญ่
+ * และถ้าพลาด สถานะยังเป็น "มีจุดแดง" อยู่ ครั้งหน้าจึงลองใหม่ให้เองอัตโนมัติ
+ */
+function clearBadge(userId, which) {
+  try { return setBadge(userId, which, false); }
+  catch (e) { console.error('clearBadge ' + which + ': ' + e); return false; }
+}
 
 /**
  * ติดจุดแดง "มีประกาศใหม่" ให้พนักงานหลายคนพร้อมกัน
@@ -70,13 +101,16 @@ function broadcastBadge(userIds, which) {
   var ids = (userIds || []).filter(Boolean);
   if (!ids.length) return 0;
 
-  /* จัดกลุ่มตามสถานะปลายทาง เพื่อให้ยิง bulk ได้เป็นก้อน */
-  var groups = {};
+  /* จัดกลุ่มตามสถานะปลายทาง เพื่อให้ยิง bulk ได้เป็นก้อน
+     ★ ยังไม่จด Properties ในรอบนี้ — จดหลังจาก LINE ตอบสำเร็จเท่านั้น
+       ด้วยเหตุผลเดียวกับ setBadge: ถ้าจดก่อนแล้ว LINE พลาด ระบบจะเชื่อว่า
+       ทุกคนได้จุดแดงแล้ว ทั้งที่เมนูของเขาไม่เปลี่ยนเลยสักคน */
+  var groups = {}, want = {};
   ids.forEach(function (uid) {
     var b = getBadges_(uid);
     if (which === 'news') b.news = true;
     if (which === 'hr')   b.hr   = true;
-    saveBadges_(uid, b);
+    want[uid] = b;
     var m = menuIdFor_(b);
     (groups[m] = groups[m] || []).push(uid);
   });
@@ -84,18 +118,26 @@ function broadcastBadge(userIds, which) {
   var done = 0;
   Object.keys(groups).forEach(function (menuId) {
     if (!menuId) return;
-    try { done += bulkLinkRichMenu(groups[menuId], menuId); }
-    catch (e) { console.error('broadcastBadge: ' + e); }
+    try {
+      done += bulkLinkRichMenu(groups[menuId], menuId);
+      groups[menuId].forEach(function (uid) { saveBadges_(uid, want[uid]); });
+    } catch (e) {
+      /* ไม่จดกลุ่มที่พลาด — คราวหน้าที่ HR กดเผยแพร่ซ้ำ คนกลุ่มนี้จะถูกลองใหม่ */
+      console.error('broadcastBadge: ' + e);
+    }
   });
   return done;
 }
 
 /** ล้างจุดแดงทุกคน (ใช้ตอนซ่อมระบบ) */
 function resetAllBadges() {
+  var ids = activeUserIds();
+  /* ★ สลับเมนูจริงให้สำเร็จก่อน ค่อยลบแฟล็ก — เหตุผลเดียวกับ setBadge
+     ถ้าลบแฟล็กก่อนแล้ว LINE พลาด ระบบจะเชื่อว่าไม่มีใครมีจุดแดง
+     ทั้งที่จุดแดงยังค้างบนเมนูจริงของทุกคน และจะไม่มีอะไรมาซ่อมให้อีก */
+  if (ids.length && CFG.richMenuMain) bulkLinkRichMenu(ids, CFG.richMenuMain);
   var all = P.getProperties();
   Object.keys(all).forEach(function (k) { if (k.indexOf('badge_') === 0) P.deleteProperty(k); });
-  var ids = activeUserIds();
-  if (ids.length && CFG.richMenuMain) bulkLinkRichMenu(ids, CFG.richMenuMain);
   return ids.length;
 }
 

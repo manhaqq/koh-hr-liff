@@ -25,7 +25,10 @@ function onOpen() {
       .addItem('📋 ตรวจสอบสุขภาพข้อมูลพนักงาน', 'auditEmployees'))
     .addSubMenu(SpreadsheetApp.getUi().createMenu('💬 เรื่องถึง HR')
       .addItem('ส่งคำตอบให้ผู้แจ้ง (แถวปัจจุบัน)', 'replyTicketSelected')
-      .addItem('ดูเรื่องที่เกินกำหนด', 'showOverdueTickets'))
+      .addItem('✅ ปิดเรื่อง (แถวปัจจุบัน)', 'closeTicketSelected')
+      .addItem('ดูเรื่องที่เกินกำหนด', 'showOverdueTickets')
+      .addSeparator()
+      .addItem('🔁 แปลงคำสถานะเดิมให้ตรงกัน (ทำครั้งเดียว)', 'migrateStatusVocabulary'))
     .addSubMenu(SpreadsheetApp.getUi().createMenu('🗓️ ตารางงาน')
       .addItem('🟢 แจ้งว่าตารางใหม่ออกแล้ว (ฟรี)', 'refreshNewsBadge')
       .addItem('🗓️ สร้างตารางกะจากรูปแบบ (ShiftPattern)', 'generateScheduleFromPattern')
@@ -180,9 +183,21 @@ function publishPendingAnnouncements() {
   });
   if (!list.length) { alert_('ไม่มีอะไรค้าง', 'ประกาศที่เผยแพร่แล้วถูกแจ้งครบทุกฉบับ'); return; }
   if (!confirm_('ยืนยัน', 'จะเผยแพร่ประกาศ ' + list.length + ' ฉบับ\nใช้โควตาข้อความ 0 — ดำเนินการเลยหรือไม่?')) return;
-  var n = 0;
-  list.forEach(function (a) { n = notifyAnnouncement_(a, false); });
-  alert_('เผยแพร่เสร็จแล้ว ✅', 'ประกาศ ' + list.length + ' ฉบับ · แจ้งพนักงาน ' + n + ' คน · ใช้โควตา 0');
+
+  /* ★ ต้องบวกสะสม ไม่ใช่ทับค่าเดิม
+     เดิมเขียน n = notify(...) ในลูป ตัวเลขที่ขึ้นในกล่องสรุปจึงเป็นจำนวนผู้รับ
+     ของ "ประกาศฉบับสุดท้าย" ฉบับเดียว ประกาศเจาะกลุ่มคนเดียวที่อยู่ท้ายคิว
+     ทำให้ขึ้นว่า "แจ้ง 1 คน" ทั้งที่เพิ่งแจ้งไปทั้งร้าน */
+  var n = 0, failed = 0;
+  list.forEach(function (a) {
+    /* ประกาศฉบับหนึ่งพังต้องไม่ทำให้ฉบับที่เหลือไม่ถูกเผยแพร่ */
+    try { n += notifyAnnouncement_(a, false); }
+    catch (e) { failed++; console.error('publishPending: ' + a.id + ' ' + e); }
+  });
+  alert_('เผยแพร่เสร็จแล้ว ✅',
+    'ประกาศ ' + (list.length - failed) + ' ฉบับ · แจ้งเตือนรวม ' + n + ' ครั้ง · ใช้โควตา 0\n' +
+    '(นับซ้ำได้ ถ้าพนักงานคนเดียวอยู่ในกลุ่มเป้าหมายของหลายฉบับ)' +
+    (failed ? ('\n\n⚠️ มี ' + failed + ' ฉบับที่แจ้งไม่สำเร็จ — ดูรายละเอียดที่ Apps Script > Executions') : ''));
 }
 
 /**
@@ -589,7 +604,7 @@ function replyTicketSelected() {
   if (!t) { alert_('ไม่พบข้อมูล', 'แถวนี้ว่าง'); return; }
   if (!String(t.reply).trim()) { alert_('ยังไม่มีคำตอบ', 'กรุณาพิมพ์คำตอบในคอลัมน์ reply ก่อน แล้วค่อยกดส่ง'); return; }
   if (String(t.privacy).trim() === PRIVACY.ANONYMOUS || !String(t.lineUserId).trim()) {
-    updateRow(SHEETS.TICKETS, row, { status: 'เสร็จสิ้น', closedAt: now_() });
+    updateRow(SHEETS.TICKETS, row, { status: TICKET_STATUS.CLOSED, closedAt: now_() });
     alert_('เรื่องไม่ระบุตัวตน', 'เรื่องนี้ผู้แจ้งเลือก "ไม่ระบุตัวตน" ระบบจึงส่งคำตอบกลับไม่ได้\nกรุณาประกาศผลการดำเนินการแบบรวมผ่านเมนูประกาศแทน\n\nปิดเรื่องให้แล้ว');
     return;
   }
@@ -597,17 +612,71 @@ function replyTicketSelected() {
       'ระบบจะติดจุดแดงบนเมนู “ติดต่อ HR” ของเขา (ไม่ใช้โควตาข้อความ)\n' +
       'เขาจะเห็นคำตอบเมื่อเปิดเมนูนั้น')) return;
 
-  updateRow(SHEETS.TICKETS, row, { status: 'ตอบแล้ว', closedAt: now_() });
-  setBadge(String(t.lineUserId).trim(), 'hr', true);
+  /* ★ ติดจุดแดงให้สำเร็จ "ก่อน" เปลี่ยนสถานะเป็นตอบแล้ว
+     จุดแดงคือช่องทางเดียวที่บอกผู้แจ้งว่ามีคำตอบ (โหมด 0 บาท ไม่มี push)
+     ถ้าสลับลำดับ แล้ว LINE พลาด เรื่องจะกลายเป็น "ตอบแล้ว" หลุดออกจากงานค้าง
+     ทั้งที่ไม่มีใครไปบอกผู้แจ้งเลยสักคน — เขาจะรอคำตอบที่ไม่มีวันมาถึง */
+  var notified = false;
+  try {
+    notified = setBadge(String(t.lineUserId).trim(), 'hr', true);
+  } catch (e) {
+    console.error('replyTicket badge: ' + e);
+    audit(actor_(), 'TICKET_REPLY_BADGE_FAIL', t.ticketId, String(e).slice(0, 200));
+    alert_('⚠️ ติดจุดแดงไม่สำเร็จ',
+      'ระบบยังไม่ได้เปลี่ยนสถานะเรื่อง ' + t.ticketId + ' เพราะแจ้งเตือนผู้แจ้งไม่สำเร็จ\n\n' +
+      'สาเหตุที่พบบ่อย: ผู้แจ้งบล็อกหรือลบบัญชี OA ไปแล้ว หรือยังไม่ได้สร้าง Rich Menu\n\n' +
+      'สิ่งที่ทำได้\n' +
+      '• ตรวจเมนู 🎛️ Rich Menu > ดูรายการ Rich Menu ปัจจุบัน\n' +
+      '• ถ้าผู้แจ้งบล็อก OA แล้ว ให้ติดต่อเขาโดยตรง แล้วกดเมนู "✅ ปิดเรื่อง"');
+    return;
+  }
+
+  updateRow(SHEETS.TICKETS, row, { status: TICKET_STATUS.ANSWERED, closedAt: now_() });
   audit(actor_(), 'TICKET_REPLY', t.ticketId, 'badge (0 ข้อความ)');
   alert_('ตอบเรียบร้อย ✅',
-    'ติดจุดแดงบนเมนูของผู้แจ้งแล้ว\nเขาจะเห็นคำตอบเมื่อกดเมนู “ติดต่อ HR”\n\n💰 ใช้โควตาข้อความ: 0');
+    (notified ? 'ติดจุดแดงบนเมนูของผู้แจ้งแล้ว\n'
+              : 'ผู้แจ้งมีจุดแดงค้างอยู่แล้ว จึงไม่ต้องสลับเมนูซ้ำ\n') +
+    'เขาจะเห็นคำตอบเมื่อกดเมนู “ติดต่อ HR” แล้วเปิด “เรื่องของฉัน”\n\n' +
+    'สถานะเรื่องนี้เป็น “' + TICKET_STATUS.ANSWERED + '” แล้ว\n' +
+    'เมื่อจบเรื่องจริง ให้กดเมนู “✅ ปิดเรื่อง” เพื่อเปลี่ยนเป็น “' + TICKET_STATUS.CLOSED + '”\n\n' +
+    '💰 ใช้โควตาข้อความ: 0');
+}
+
+/**
+ * ปิดเรื่อง — เดิมไม่มีวิธีปิดเลยนอกจากพิมพ์คำว่า "เสร็จสิ้น" ลงช่อง status เอง
+ * ซึ่งไม่มีเอกสารที่ไหนบอกไว้ และถ้าพิมพ์คำอื่นระบบจะยังนับว่าค้างต่อไปเรื่อย ๆ
+ */
+function closeTicketSelected() {
+  var sh = SpreadsheetApp.getActiveSheet();
+  if (sh.getName() !== SHEETS.TICKETS) { alert_('ผิดชีต', 'กรุณาไปที่ชีต Tickets แล้วคลิกแถวที่ต้องการปิด'); return; }
+  var row = sh.getActiveRange().getRow();
+  if (row < 2) { alert_('เลือกแถว', 'กรุณาคลิกที่แถวของเรื่องก่อน'); return; }
+  var t = readTable(SHEETS.TICKETS).filter(function (x) { return x._row === row; })[0];
+  if (!t) { alert_('ไม่พบข้อมูล', 'แถวนี้ว่าง'); return; }
+
+  if (normalizeTicketStatus(t.status) === TICKET_STATUS.CLOSED) {
+    alert_('ปิดอยู่แล้ว', 'เรื่อง ' + t.ticketId + ' ปิดไปแล้วเมื่อ ' + (t.closedAt || '-'));
+    return;
+  }
+
+  var noReply = !String(t.reply).trim();
+  if (!confirm_('ยืนยันการปิดเรื่อง',
+      'เรื่อง ' + t.ticketId + '\n' +
+      'หัวข้อ: ' + String(t.subject || '-').slice(0, 60) + '\n' +
+      'สถานะปัจจุบัน: ' + (t.status || '(ว่าง)') + '\n\n' +
+      (noReply ? '⚠️ เรื่องนี้ยังไม่มีคำตอบในคอลัมน์ reply\n' +
+                 '   ถ้าคุยกันจบนอกระบบแล้วก็ปิดได้ แต่ผู้แจ้งจะไม่เห็นคำตอบในแอป\n\n' : '') +
+      'ปิดแล้วเรื่องนี้จะไม่ถูกนับเป็นงานค้างและไม่โผล่ในอีเมล 09:00 อีก\nดำเนินการหรือไม่?')) return;
+
+  updateRow(SHEETS.TICKETS, row, { status: TICKET_STATUS.CLOSED, closedAt: now_() });
+  audit(actor_(), 'TICKET_CLOSE', t.ticketId, noReply ? 'ปิดโดยไม่มีคำตอบในระบบ' : 'ปิดหลังตอบแล้ว');
+  alert_('ปิดเรื่องแล้ว ✅', 'เรื่อง ' + t.ticketId + ' เปลี่ยนเป็น “' + TICKET_STATUS.CLOSED + '” แล้ว');
 }
 
 function showOverdueTickets() {
   var today = todayStr_();
   var list = readTable(SHEETS.TICKETS).filter(function (t) {
-    return String(t.status).indexOf('เสร็จ') < 0 && String(t.slaDue).trim() && String(t.slaDue).trim() < today;
+    return isTicketOpen(t.status) && String(t.slaDue).trim() && String(t.slaDue).trim() < today;
   });
   if (!list.length) { alert_('ยอดเยี่ยม 🎉', 'ไม่มีเรื่องค้างเกินกำหนด'); return; }
   alert_('⚠️ เรื่องเกินกำหนด ' + list.length + ' รายการ',
@@ -624,7 +693,7 @@ function showDashboard() {
   var active = emps.filter(isActive);
   var verified = active.filter(function (e) { return String(e.lineUserId).trim(); });
   var tk = readTable(SHEETS.TICKETS);
-  var openTk = tk.filter(function (t) { return String(t.status).indexOf('เสร็จ') < 0; });
+  var openTk = tk.filter(function (t) { return isTicketOpen(t.status); });
   var q = { limit: 0, used: 0 };
   try { q = getQuota(); } catch (e) {}
   var miss = readTable(SHEETS.AUDIT).filter(function (a) { return a.action === 'FAQ_MISS'; });
@@ -911,4 +980,118 @@ function addMissingSettings_() {
     added.push(w[0]);
   });
   return added;
+}
+
+/* ================================================================
+ * 🔁 แปลงคำสถานะเดิมให้ตรงกัน — ตั้งใจให้รันครั้งเดียว
+ * ----------------------------------------------------------------
+ * ก่อนหน้านี้แต่ละจุดในโค้ดเขียนคำสถานะกันคนละแบบ ในชีตจริงจึงมีทั้ง
+ * 'ใหม่' 'ตอบแล้ว' 'เสร็จสิ้น' และคำที่ HR พิมพ์เองอีกหลายแบบปนกันอยู่
+ * ฟังก์ชันนี้แปลงของเดิมให้เป็นคำมาตรฐานใน TICKET_STATUS / LEAVE_STATUS
+ *
+ * ★ กติกาความปลอดภัย 3 ข้อ
+ *   1. รายงานให้ดูก่อนว่าจะแก้กี่แถว แถวไหน จากอะไรเป็นอะไร แล้วถามยืนยัน
+ *   2. ก่อนเขียนจริง ก๊อบปี้แท็บ Tickets และ Leave เป็นแท็บสำรองลงวันที่ไว้
+ *   3. คำที่ระบบไม่รู้จัก "ไม่แตะ" เด็ดขาด — ยกมาโชว์ให้ HR ตัดสินใจเอง
+ *      เดาแทนคนแล้วเขียนทับข้อมูลแรงงานเป็นความเสี่ยงที่ไม่คุ้มกัน
+ *
+ * รันซ้ำได้โดยไม่เสียหาย (แถวที่ตรงมาตรฐานแล้วจะไม่ถูกนับและไม่ถูกเขียนซ้ำ)
+ * ================================================================ */
+function migrateStatusVocabulary() {
+  /* อ่านสดจากชีต ไม่เอาของในแคช — นี่คือปฏิบัติการที่เขียนทับข้อมูลจริง */
+  var tk = planStatusChanges_(readTable(SHEETS.TICKETS, true), 'ticketId', normalizeTicketStatus);
+  var lv = planStatusChanges_(readTable(SHEETS.LEAVE, true),   'leaveId',  normalizeLeaveStatus);
+
+  var total = tk.changes.length + lv.changes.length;
+  if (!total && !tk.unknown.length && !lv.unknown.length) {
+    alert_('ไม่มีอะไรต้องแปลง ✅',
+      'คำสถานะในชีต Tickets (' + tk.scanned + ' แถว) และ Leave (' + lv.scanned + ' แถว)\n' +
+      'ตรงกับมาตรฐานอยู่แล้วทุกแถว');
+    return;
+  }
+
+  var msg =
+    '── จะแก้ทั้งหมด ' + total + ' แถว ──\n' +
+    'Tickets : ' + tk.changes.length + ' / ' + tk.scanned + ' แถว\n' +
+    'Leave   : ' + lv.changes.length + ' / ' + lv.scanned + ' แถว\n\n' +
+    migrationSample_('Tickets', tk) + migrationSample_('Leave', lv) +
+    (tk.unknown.length || lv.unknown.length
+      ? ('⚠️ คำที่ระบบไม่รู้จัก จะไม่ถูกแตะ ต้องแก้เองในชีต\n' +
+         tk.unknown.concat(lv.unknown).slice(0, 8).map(function (u) {
+           return '   • แถว ' + u.row + ': "' + u.from + '"';
+         }).join('\n') + '\n\n')
+      : '') +
+    'ก่อนเขียน ระบบจะก๊อบปี้แท็บ Tickets และ Leave เป็นแท็บสำรองลงวันที่ให้\n\n' +
+    (total > 1200 ? '⚠️ จำนวนแถวเยอะ อาจรันไม่จบใน 6 นาที ถ้าค้างให้กดเมนูนี้ซ้ำ ระบบจะทำต่อจากเดิม\n\n' : '') +
+    'ดำเนินการเลยหรือไม่?';
+
+  if (!confirm_('🔁 ตรวจก่อนแปลงคำสถานะ', msg)) {
+    alert_('ยกเลิกแล้ว', 'ยังไม่ได้แก้อะไรในชีตเลยสักแถว');
+    return;
+  }
+
+  var backups = [backupSheetCopy_(SHEETS.TICKETS), backupSheetCopy_(SHEETS.LEAVE)]
+                .filter(Boolean);
+
+  var doneTk = applyStatusChanges_(SHEETS.TICKETS, tk.changes);
+  var doneLv = applyStatusChanges_(SHEETS.LEAVE,   lv.changes);
+
+  audit(actor_(), 'STATUS_MIGRATE', String(doneTk + doneLv) + ' แถว',
+        'Tickets ' + doneTk + ' / Leave ' + doneLv);
+
+  alert_('แปลงคำสถานะเรียบร้อย ✅',
+    'Tickets : แก้ ' + doneTk + ' แถว\n' +
+    'Leave   : แก้ ' + doneLv + ' แถว\n\n' +
+    (backups.length ? ('แท็บสำรอง:\n• ' + backups.join('\n• ') + '\n' +
+                       '(ลบทิ้งได้เมื่อมั่นใจแล้ว แต่อย่าเพิ่งลบวันนี้)\n\n') : '') +
+    'ลองกดเมนู 📊 รายงาน > "สรุปเรื่องถึง HR (SLA)" และ "สรุปการลา" เพื่อดูว่าตัวเลขตรงแล้ว');
+}
+
+/** วางแผนว่าจะแก้แถวไหนบ้าง โดยยังไม่เขียนอะไรลงชีต */
+function planStatusChanges_(rows, idField, normalize) {
+  var changes = [], unknown = [];
+  rows.forEach(function (r) {
+    var raw  = String(r.status === null || r.status === undefined ? '' : r.status).trim();
+    var want = normalize(raw);
+    if (!want) { unknown.push({ row: r._row, id: r[idField], from: raw }); return; }
+    if (want === raw) return;                       // ตรงมาตรฐานอยู่แล้ว
+    changes.push({ row: r._row, id: r[idField], from: raw || '(ว่าง)', to: want });
+  });
+  return { scanned: rows.length, changes: changes, unknown: unknown };
+}
+
+/** ตัวอย่างการแก้ไม่กี่บรรทัด ให้คนกดตัดสินใจได้จริงก่อนยืนยัน */
+function migrationSample_(label, plan) {
+  if (!plan.changes.length) return '';
+  var lines = plan.changes.slice(0, 6).map(function (c) {
+    return '   • ' + (c.id || ('แถว ' + c.row)) + ': "' + c.from + '" → "' + c.to + '"';
+  });
+  if (plan.changes.length > 6) lines.push('   • … อีก ' + (plan.changes.length - 6) + ' แถว');
+  return label + '\n' + lines.join('\n') + '\n\n';
+}
+
+function applyStatusChanges_(sheetName, changes) {
+  var n = 0;
+  changes.forEach(function (c) {
+    /* เขียนผ่าน updateRow เสมอ เพื่อให้ผ่าน safeCell_ และล้างแคชของแท็บให้ด้วย */
+    updateRow(sheetName, c.row, { status: c.to });
+    n++;
+  });
+  return n;
+}
+
+/** ก๊อบปี้ทั้งแท็บเป็นแท็บสำรองลงวันที่ (กู้คืนได้เองโดยไม่ต้องพึ่งประวัติเวอร์ชัน) */
+function backupSheetCopy_(sheetName) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var src = ss.getSheetByName(sheetName);
+    if (!src) return '';
+    var name = 'สำรอง-' + sheetName + '-' + Utilities.formatDate(new Date(), CFG.TZ, 'yyyyMMdd-HHmmss');
+    src.copyTo(ss).setName(name);
+    return name;
+  } catch (e) {
+    console.error('backupSheetCopy_ ' + sheetName + ': ' + e);
+    /* ★ สำรองไม่สำเร็จ ต้องหยุดทั้งงาน ไม่ใช่ทำต่อแบบไม่มีตาข่ายรอง */
+    throw new Error('ก๊อบปี้แท็บ ' + sheetName + ' เป็นแท็บสำรองไม่สำเร็จ จึงยังไม่แก้ข้อมูลใด ๆ: ' + e);
+  }
 }

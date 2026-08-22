@@ -287,10 +287,88 @@ function apiAppGuide_() {
 /* ================================================================
  * ตารางงาน
  * ================================================================ */
+
+/** ทำ map จากรหัสกะ → แถวในชีต Shifts (แยกออกมาเพื่อให้สร้างครั้งเดียวแล้วใช้ร่วมกัน) */
+function shiftMapOf_(shiftRows) {
+  var m = {};
+  (shiftRows || []).forEach(function (s) { m[String(s.shiftCode).trim()] = s; });
+  return m;
+}
+
+/**
+ * ตารางกะของพนักงานหนึ่งคน — แกนกลางของ getScheduleFor
+ *
+ * ★ ทำไมต้องรับตารางที่อ่านมาแล้วเข้ามาด้วย
+ *   หน้าตารางงานต้องใช้ทั้งกะของตัวเองและกะของทีมในคำขอเดียว
+ *   ถ้าแต่ละส่วนอ่านแท็บเอง จะอ่าน Schedule 2 รอบ Shifts 3 รอบต่อการเปิดหนึ่งครั้ง
+ *   ส่งอาเรย์ที่อ่านมาแล้วต่อลงมาแทน = อ่านแท็บละครั้งเดียวจบ
+ *
+ * @param {Array=} schedRows  แถวจากแท็บ Schedule (ไม่ส่งมา = อ่านเอง)
+ * @param {Object=} shiftMap  map จาก shiftMapOf_ (ไม่ส่งมา = สร้างเอง)
+ */
+function scheduleFor_(empCode, fromDate, toDate, schedRows, shiftMap) {
+  var code = String(empCode).trim().toUpperCase();
+  /* ★ empCode ว่าง = ไม่ตรงกับใครเลย ห้ามปล่อยให้ '' ไปแมตช์กับแถวที่ empCode ว่างเหมือนกัน
+     (ในชีต Schedule มีแถวแบบนั้นจริง จากรูปแบบกะที่ยังจับคู่ชื่อไม่ได้) */
+  if (!code) return [];
+  var rows = schedRows || readTable(SHEETS.SCHEDULE);
+  var map  = shiftMap  || shiftMapOf_(readTable(SHEETS.SHIFTS));
+
+  return rows
+    .filter(function (r) {
+      if (String(r.empCode).trim().toUpperCase() !== code) return false;
+      var d = String(r.date).trim();
+      if (fromDate && d < fromDate) return false;
+      if (toDate   && d > toDate)   return false;
+      return true;
+    })
+    .map(function (r) {
+      var s = map[String(r.shiftCode).trim()] || {};
+      return {
+        date:      String(r.date).trim(),
+        shiftCode: String(r.shiftCode).trim(),
+        shiftName: s.label || s.name || String(r.shiftCode).trim(),
+        dept:      r.dept || s.dept || '',
+        start:     r.startTime || s.start || '',
+        end:       r.endTime   || s.end   || '',
+        breaks:    r.breaks    || s.breaks || '',
+        ot:        r.ot        || s.ot     || '',
+        branch:    r.branch || '',
+        color:     s.color || CFG.BRAND.primary,
+        note:      r.note || '',
+        status:    r.status || ''
+      };
+    })
+    .sort(function (a, b) { return a.date.localeCompare(b.date); });
+}
+
+/**
+ * ตัดชีต Shifts ให้เหลือเฉพาะที่หน้าเว็บวาดจริง (คำอธิบายสีใต้ปฏิทิน)
+ * ★ เดิมส่งทั้งแถวดิบออกไป ซึ่งพ่วง _row (เลขแถวจริงในชีต) และคอลัมน์ที่
+ *   ไม่เคยมีใครตรวจว่าเหมาะจะออกนอกระบบไหม ติดไปด้วยทุกคอลัมน์
+ *   ฟิลด์เดียวในทั้ง API ที่ยังส่งข้อมูลดิบจากชีตออกไปตรง ๆ
+ */
+function publicShift_(s) {
+  return {
+    shiftCode: String(s.shiftCode).trim(),
+    label:     s.label || s.name || String(s.shiftCode).trim(),
+    color:     s.color || CFG.BRAND.primary
+  };
+}
+
 function apiSchedule_(emp, d) {
   var from = d.from || addDaysStr_(-7);
   var to   = d.to   || addDaysStr_(45);
-  var mine = getScheduleFor(emp.empCode, from, to);
+
+  /* ★ อ่านแต่ละแท็บ "ครั้งเดียว" แล้วส่งอาเรย์ต่อลงไปให้ทุกส่วนใช้ร่วมกัน
+     หน้านี้คือหน้าที่ช้าที่สุดในแอป เพราะเดิมอ่าน Schedule 2 รอบ และ Shifts 3 รอบ
+     ในคำขอเดียว แม้จะมีแคชคั่นอยู่ก็ไม่ช่วยในจังหวะที่สำคัญที่สุด คือทันทีที่ HR
+     แก้ตารางเสร็จ — แคชถูกล้าง แล้วพนักงานทั้งร้านเปิดดูพร้อมกันพอดี */
+  var schedRows = readTable(SHEETS.SCHEDULE);
+  var shiftRows = readTable(SHEETS.SHIFTS);
+  var shiftMap  = shiftMapOf_(shiftRows);
+
+  var mine = scheduleFor_(emp.empCode, from, to, schedRows, shiftMap);
 
   /* ถ้าเป็นหัวหน้า/HR ให้เห็นของทั้งสาขาด้วย */
   var team = [];
@@ -303,9 +381,7 @@ function apiSchedule_(emp, d) {
         pos: e.position, status: e.status
       };
     });
-    var shiftMap = {};
-    readTable(SHEETS.SHIFTS).forEach(function (s) { shiftMap[String(s.shiftCode).trim()] = s; });
-    team = readTable(SHEETS.SCHEDULE).filter(function (r) {
+    team = schedRows.filter(function (r) {
       var dt = String(r.date).trim();
       if (dt < from || dt > to) return false;
       var info = nameMap[String(r.empCode).trim().toUpperCase()];
@@ -329,7 +405,8 @@ function apiSchedule_(emp, d) {
   }
 
   return { ok: true, mine: mine, team: team, canSeeTeam: team.length > 0 || role !== ROLES.STAFF,
-           shifts: readTable(SHEETS.SHIFTS) };
+           shifts: shiftRows.filter(function (s) { return String(s.shiftCode).trim(); })
+                            .map(publicShift_) };
 }
 
 /* ================================================================
@@ -505,8 +582,13 @@ function reportMyLeave_(emp) {
   return readTable(SHEETS.LEAVE).filter(function (l) {
     return String(l.empCode).trim().toUpperCase() === code;
   }).map(function (l) {
+    /* ★ ส่ง approved ออกไปเป็น true/false ให้หน้าเว็บใช้แทนการเทียบข้อความเอง
+       เดิม reports.html เทียบ status === 'approved' (อังกฤษ) แต่ระบบเขียนคำไทย
+       ยอดรวม "วันลาที่อนุมัติแล้ว" จึงเป็น 0 ตลอดกาล
+       status ยังส่งคำไทยตามเดิมไว้แสดงผล — ไม่เปลี่ยนรูปร่างคำตอบเดิม */
     return { leaveId: l.leaveId, type: l.type, dateFrom: l.dateFrom, dateTo: l.dateTo,
-             days: l.days, status: l.status, decidedAt: l.decidedAt, remark: l.remark };
+             days: l.days, status: l.status, decidedAt: l.decidedAt, remark: l.remark,
+             approved: normalizeLeaveStatus(l.status) === LEAVE_STATUS.APPROVED };
   }).sort(function (a, b) { return String(b.dateFrom).localeCompare(String(a.dateFrom)); });
 }
 
@@ -522,8 +604,7 @@ function reportDeptWeek_(emp) {
     if (String(e.status).trim() === EMP_STATUS.RESIGNED) return;
     name[String(e.empCode).trim().toUpperCase()] = e;
   });
-  var shiftMap = {};
-  readTable(SHEETS.SHIFTS).forEach(function (x) { shiftMap[String(x.shiftCode).trim()] = x; });
+  var shiftMap = shiftMapOf_(readTable(SHEETS.SHIFTS));
 
   var out = [];
   readTable(SHEETS.SCHEDULE).forEach(function (r) {
@@ -600,7 +681,8 @@ function apiTicketCreate_(emp, userId, d) {
     subject: subject, detail: detail, priority: d.priority || 'ปกติ'
   });
 
-  var t = findTicket(res.ticketId);
+  /* (เดิมมี findTicket(res.ticketId) ตรงนี้ ซึ่งอ่านแท็บ Tickets ทั้งแท็บ
+     แล้วไม่ได้ถูกใช้ที่ไหนเลย — แท็บนี้โตขึ้นทุกวันและไม่มีวันเล็กลง) */
 
   /* ---- แจ้งทีม HR ทางอีเมล (โหมด 0 บาท — ไม่ใช้โควตาข้อความ) ---- */
   try {
