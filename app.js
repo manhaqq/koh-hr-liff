@@ -3,6 +3,17 @@
  * ================================================================= */
 const CFGX = window.KOH_CONFIG;
 
+/* ---------- ทำให้ THEME ใน config.js มีผลจริง ----------
+ * เดิมบล็อก THEME เขียนคอมเมนต์ว่า "เปลี่ยนสีที่นี่ได้เลย" แต่ไม่มีโค้ดไหนอ่านค่ามันเลย
+ * ใครที่แก้สีตรงนั้นแล้วรีโหลดจะไม่เห็นอะไรเปลี่ยน และมักเข้าใจผิดว่าเป็นแคชค้าง
+ * ตอนนี้ค่าใน THEME จะทับตัวแปรใน app.css จริง (ค่าตั้งต้นใน :root ตรงกันอยู่แล้ว
+ * หน้าจึงไม่กะพริบตอนโหลด) */
+if (CFGX && CFGX.THEME) {
+  const kebab = k => k.replace(/[A-Z]/g, c => '-' + c.toLowerCase());
+  Object.entries(CFGX.THEME).forEach(([k, v]) =>
+    document.documentElement.style.setProperty('--' + kebab(k), v));
+}
+
 /* ---------- Helper DOM ---------- */
 const $  = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];

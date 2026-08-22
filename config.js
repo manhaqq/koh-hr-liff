@@ -24,7 +24,9 @@ window.KOH_CONFIG = {
   ORG_SHORT:  'โก๋ในซอย',
   TAGLINE:    'HR Communication Hub',
 
-  /* 4) สีแบรนด์ — ต้องตรงกับ app.css, apps-script/00_Config.js และ richmenu/build.py */
+  /* 4) สีแบรนด์ของหน้าเว็บ — app.js อ่านค่านี้ไปทับตัวแปรใน app.css ตอนโหลด
+     (ค่าใน app.css :root ต้องตรงกัน ไม่งั้นหน้าจะกะพริบตอนเปิด)
+     ฝั่งการ์ด Flex ในแชทและอีเมลใช้คนละชุด อยู่ที่ apps-script/00_Config.js */
   THEME: {
     primary: '#6B4A2B',
     accent:  '#DBA66B',   // สีแทน — ใช้เป็นพื้นเท่านั้น
