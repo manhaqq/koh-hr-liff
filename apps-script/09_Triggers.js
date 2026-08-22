@@ -9,7 +9,7 @@
 function installTriggers() {
   var HANDLERS = ['refreshNewsBadge', 'dailyHrEmail', 'autoPublishAnnouncements',
                   'weeklyHealthCheck', 'pushWeeklySchedule', 'pushTomorrowReminder', 'dailyHrDigest',
-                  'onEditInvalidateCache'];
+                  'onEditInvalidateCache', 'backupDatabase'];
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (HANDLERS.indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t);
   });
@@ -30,6 +30,11 @@ function installTriggers() {
   ScriptApp.newTrigger('weeklyHealthCheck').timeBased()
     .onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(7).inTimezone(CFG.TZ).create();
 
+  // อาทิตย์ 03:00 — สำรองฐานข้อมูลลง Drive เก็บ 8 สัปดาห์
+  // ประวัติเวอร์ชันของ Sheets ไม่ใช่การสำรองข้อมูล มันตายพร้อมกับไฟล์ต้นทาง
+  ScriptApp.newTrigger('backupDatabase').timeBased()
+    .onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(3).inTimezone(CFG.TZ).create();
+
   // ทุกครั้งที่มีคนแก้ชีต — ล้างแคชของแท็บนั้นทันที
   // ต้องเป็นทริกเกอร์แบบติดตั้ง (ไม่ใช่ onEdit ธรรมดา) เพราะ onEdit ธรรมดา
   // ทำงานในโหมดสิทธิ์จำกัด ซึ่งเรียก CacheService ไม่ได้เสมอไป
@@ -42,7 +47,8 @@ function installTriggers() {
     '• ทุกวัน 09:00 — อีเมลสรุปงานค้างถึง HR\n' +
     '• เสาร์ 18:00 — ติดจุดแดงแจ้งตารางสัปดาห์หน้า\n' +
     '• จันทร์ 07:00 — ตรวจสุขภาพระบบ\n' +
-    '• ทุกครั้งที่แก้ชีต — ล้างแคชให้ข้อมูลใหม่ขึ้นทันที\n\n' +
+    '• ทุกครั้งที่แก้ชีต — ล้างแคชให้ข้อมูลใหม่ขึ้นทันที\n' +
+    '• อาทิตย์ 03:00 — สำรองฐานข้อมูลลง Drive (เก็บ 8 สัปดาห์)\n\n' +
     'ปิด/เปิดแต่ละรายการได้ที่ชีต Settings');
 }
 

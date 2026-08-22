@@ -4,8 +4,10 @@
 #   ./scripts/rollback.sh            → ดูรายการเวอร์ชันที่ย้อนได้
 #   ./scripts/rollback.sh v0.2.0     → ย้อนกลับไปเวอร์ชันนั้น
 #
-# ★ หลังบ้านย้อนได้ทันทีโดยไม่ต้องแตะโค้ด เพราะ Apps Script เก็บทุกเวอร์ชันไว้
-#   แค่ชี้ deployment เดิมกลับไปเวอร์ชันเก่า URL ไม่เปลี่ยน พนักงานไม่รู้สึกอะไร
+# ★ ใช้ git revert ไม่ใช่ git checkout + force push
+#   force push จาก detached HEAD จะลบทุก commit ที่ทำหลังแท็กนั้นทิ้งถาวร
+#   ซึ่งเป็นการทำลายข้อมูล ไม่ใช่การย้อนกลับ
+#   revert สร้าง commit ใหม่ที่ย้อนการเปลี่ยนแปลง ประวัติยังอยู่ครบและย้อนซ้ำได้
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
@@ -15,30 +17,42 @@ TAG="${1:-}"
 if [ -z "$TAG" ]; then
   echo "แท็กใน git:"; git tag -l -n1 | sed 's/^/  /'
   echo; echo "เวอร์ชันใน Apps Script:"; ( cd apps-script && clasp versions | sed 's/^/  /' )
-  echo; echo "ใช้: ./scripts/rollback.sh <tag>   แล้วดูว่าคำอธิบายเวอร์ชันตรงกับแท็กไหน"
+  echo; echo "ใช้: ./scripts/rollback.sh <tag>"
   exit 0
 fi
 
 git rev-parse "$TAG" >/dev/null 2>&1 || { echo "❌ ไม่พบแท็ก $TAG"; exit 1; }
+[ -n "$(git status --porcelain)" ] && { echo "❌ ยังมีไฟล์ที่ยังไม่ commit — จัดการก่อน"; git status --short; exit 1; }
 
-echo "เวอร์ชันของ Apps Script ที่มี:"; ( cd apps-script && clasp versions )
-read -rp "จะย้อนหลังบ้านไปเวอร์ชันเลขอะไร (Enter = ข้าม ไม่แตะหลังบ้าน): " VER
+echo "═══ สิ่งที่จะถูกย้อน (commit หลัง $TAG) ═══"
+git log --oneline "$TAG"..HEAD | sed 's/^/  /'
+echo
+read -rp "ย้อนหน้าเว็บกลับไปสภาพของ $TAG หรือไม่ (y/N)? " YN
 
-echo "▸ ย้อนโค้ดในเครื่องไปที่ $TAG"
-git checkout "$TAG"
+if [ "$YN" = "y" ]; then
+  # revert ทุก commit หลังแท็ก โดยรวบเป็น commit เดียว ประวัติเดิมไม่หายไปไหน
+  git revert --no-commit "$TAG"..HEAD
+  git commit -m "Roll back to $TAG
 
-if [ -n "$VER" ]; then
-  echo "▸ ชี้ URL เดิมกลับไปเวอร์ชัน $VER"
-  ( cd apps-script && clasp deploy -i "$LIVE_DEPLOYMENT" -V "$VER" -d "rollback → $TAG" )
+ย้อนการเปลี่ยนแปลงทั้งหมดหลัง $TAG กลับ ประวัติเดิมยังอยู่ครบ
+ถ้าจะเอากลับมาใหม่ให้ revert commit นี้อีกที"
+  git push origin main
+  echo "✅ หน้าเว็บย้อนแล้ว GitHub Pages จะอัปเดตใน 1-2 นาที"
 fi
 
-cat <<EOF
+echo; echo "═══ หลังบ้าน ═══"
+( cd apps-script && clasp versions )
+read -rp "ชี้หลังบ้านกลับไปเวอร์ชันเลขอะไร (Enter = ไม่แตะ): " VER
+if [ -n "$VER" ]; then
+  ( cd apps-script && clasp deploy -i "$LIVE_DEPLOYMENT" -V "$VER" -d "rollback → $TAG" )
+  echo "✅ หลังบ้านย้อนแล้ว URL ไม่เปลี่ยน"
+fi
 
-✅ ย้อนกลับไป $TAG แล้ว
+cat <<'EOF'
 
-หน้าเว็บ (GitHub Pages) ยังเป็นของใหม่อยู่ ถ้าต้องย้อนด้วยให้สั่ง
-   git push origin HEAD:main --force-with-lease
-
-กลับมาทำงานต่อที่เวอร์ชันล่าสุด
-   git checkout main
+⚠️ สองอย่างที่สคริปต์นี้ย้อนให้ไม่ได้ ต้องทำเอง
+   1. ข้อมูลและโครงสร้างในชีต — ถ้าเวอร์ชันที่แล้วมีการเพิ่ม/ย้ายคอลัมน์
+      ให้กู้จาก File > Version history ในชีต หรือจากไฟล์สำรองรายสัปดาห์
+   2. ภาพ Rich Menu — ต้องเปิดชีตแล้วกดเมนู
+      "🔧 ตั้งค่าระบบ > สร้าง/อัปเดต Rich Menu ทั้งหมด" อีกครั้ง
 EOF
