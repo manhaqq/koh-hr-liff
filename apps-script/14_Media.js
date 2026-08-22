@@ -78,18 +78,10 @@ function announcementImageUrl_(fileId, width) {
 /* ================================================================
  * 2) โฟลเดอร์ปลายทาง
  * ================================================================ */
-function mediaFolder_() {
-  var id = cfg(MEDIA_FOLDER_PROP);
-  if (id) {
-    try { return DriveApp.getFolderById(id); }
-    catch (e) { /* ถูกลบหรือย้ายไปแล้ว — สร้างใหม่ให้ระบบเดินต่อได้ */ }
-  }
-  /* scope ของโปรเจ็คคือ drive.file ซึ่งเห็นเฉพาะไฟล์ที่สคริปต์สร้างเอง
-     โฟลเดอร์นี้สคริปต์เป็นคนสร้าง จึงเปิดด้วย DriveApp ได้ตามปกติ
-     (รูปแบบเดียวกับ backupFolder_ ใน 12_Backup.js ที่ใช้งานได้แล้ว) */
-  var f = DriveApp.createFolder(MEDIA_FOLDER_NAME);
-  P.setProperty(MEDIA_FOLDER_PROP, f.getId());
-  return f;
+function mediaFolderId_() {
+  /* DriveApp ใช้ไม่ได้กับ scope drive.file — มันบังคับขอสิทธิ์ Drive ทั้งบัญชี
+     ทุกอย่างจึงผ่าน 15_Drive.gs ซึ่งเรียก Drive API v3 แทน */
+  return driveFolderId_(MEDIA_FOLDER_NAME, MEDIA_FOLDER_PROP);
 }
 
 /* ================================================================
@@ -202,9 +194,8 @@ function handleImageMessage_(ev, emp) {
        จำเป็น เพราะเซิร์ฟเวอร์ของ LINE โหลดรูปแบบไม่ได้ล็อกอินบัญชีเรา */
     var ext  = (mime === 'image/png') ? '.png' : '.jpg';
     var name = 'ann_' + Utilities.formatDate(new Date(), CFG.TZ, 'yyyyMMdd_HHmmss') + ext;
-    var file = mediaFolder_().createFile(blob.setName(name));
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    var fileId = file.getId();
+    var fileId = driveUpload_(blob.setName(name), name, mediaFolderId_());
+    driveShareAnyoneReader_(fileId);
 
     /* จำไว้ว่า HR คนนี้เพิ่งอัปโหลดอะไร ใช้ตรวจตอน postback กลับมา
        (ห้ามเชื่อ file id ที่ลอยมากับ postback เพียว ๆ ดู handleMediaPostback_) */
@@ -387,9 +378,9 @@ function isOwnedMediaFile_(fileId, userId) {
   try {
     var folderId = cfg(MEDIA_FOLDER_PROP);
     if (!folderId) return false;
-    var parents = DriveApp.getFileById(fileId).getParents();   /* throw ถ้าไม่ใช่ไฟล์ของสคริปต์ */
-    while (parents.hasNext()) if (parents.next().getId() === folderId) return true;
-    return false;
+    /* throw ถ้าไม่ใช่ไฟล์ที่สคริปต์นี้สร้าง — ซึ่งเป็นการกันที่ต้องการพอดี */
+    var f = driveReady_().Files.get(fileId, { fields: 'parents' });
+    return (f.parents || []).indexOf(folderId) >= 0;
   } catch (e2) { return false; }
 }
 
@@ -446,7 +437,7 @@ function removeSelectedAnnouncementImage() {
 
   var trashed = false;
   if (fileId) {
-    try { DriveApp.getFileById(fileId).setTrashed(true); trashed = true; }
+    try { driveTrash_(fileId); trashed = true; }
     catch (e) { console.error('removeSelectedAnnouncementImage: ' + e); }
   }
   updateRow(SHEETS.ANNOUNCEMENTS, a._row, { imageUrl: '', imageFileId: '' });

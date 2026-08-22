@@ -20,13 +20,7 @@ var BACKUP_FOLDER_PROP = 'BACKUP_FOLDER_ID';
 var BACKUP_KEEP        = 8;      /* เก็บ 8 สัปดาห์ ≈ 2 เดือน */
 
 function backupFolder_() {
-  var id = cfg(BACKUP_FOLDER_PROP);
-  if (id) {
-    try { return DriveApp.getFolderById(id); } catch (e) { /* ถูกลบไปแล้ว สร้างใหม่ */ }
-  }
-  var f = DriveApp.createFolder('สำรองฐานข้อมูล HR Hub');
-  P.setProperty(BACKUP_FOLDER_PROP, f.getId());
-  return f;
+  return driveFolderId_('สำรองฐานข้อมูล HR Hub', BACKUP_FOLDER_PROP);
 }
 
 /**
@@ -34,34 +28,28 @@ function backupFolder_() {
  * เรียกอัตโนมัติทุกสัปดาห์ และเรียกมือได้จากเมนู
  */
 function backupDatabase() {
-  var folder = backupFolder_();
-  var stamp  = Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM-dd_HHmm');
-  var name   = 'HRHub_' + stamp;
+  var folderId = backupFolder_();
+  var stamp    = Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM-dd_HHmm');
+  var name     = 'HRHub_' + stamp;
 
-  /* ★ ใช้ SpreadsheetApp.copy ไม่ใช่ DriveApp.makeCopy โดยตั้งใจ
-     scope ของสคริปต์คือ drive.file ซึ่งให้สิทธิ์เฉพาะไฟล์ที่สคริปต์สร้างเอง
-     จึงเปิดไฟล์ต้นฉบับผ่าน DriveApp ไม่ได้ แต่ SpreadsheetApp เปิดได้
-     ด้วย scope spreadsheets ที่มีอยู่แล้ว ส่วนสำเนาที่ได้สคริปต์เป็นคนสร้าง
-     จึงย้ายเข้าโฟลเดอร์ด้วย DriveApp ได้ตามปกติ */
-  var copy = DriveApp.getFileById(SpreadsheetApp.openById(CFG.ssId).copy(name).getId());
-  copy.moveTo(folder);
+  /* ★ คัดลอกด้วย SpreadsheetApp ไม่ใช่ Drive
+     ไฟล์ต้นฉบับ "ไม่ได้" ถูกสร้างโดยสคริปต์นี้ สิทธิ์ drive.file จึงเปิดไฟล์นั้นไม่ได้
+     แต่ SpreadsheetApp เปิดได้ด้วยสิทธิ์ spreadsheets ที่มีอยู่แล้ว
+     ส่วนสำเนาที่ได้ สคริปต์เป็นคนสร้าง จึงย้ายเข้าโฟลเดอร์ต่อได้ */
+  var copyId = SpreadsheetApp.openById(CFG.ssId).copy(name).getId();
+  driveMoveTo_(copyId, folderId);
 
-  /* ลบสำเนาเก่าที่เกิน BACKUP_KEEP — เรียงตามวันที่สร้าง เก่าสุดออกก่อน */
-  var files = [];
-  var it = folder.getFiles();
-  while (it.hasNext()) {
-    var f = it.next();
-    if (f.getName().indexOf('HRHub_') === 0) files.push(f);
-  }
-  files.sort(function (a, b) { return b.getDateCreated() - a.getDateCreated(); });
+  /* ลบสำเนาเก่าที่เกิน BACKUP_KEEP — driveList_ เรียงจากใหม่ไปเก่าให้แล้ว */
+  var files = driveList_(folderId, 'HRHub_');
   var removed = 0;
   for (var i = BACKUP_KEEP; i < files.length; i++) {
-    files[i].setTrashed(true);     /* ทิ้งลงถังขยะ ไม่ลบถาวร กู้ได้ 30 วัน */
+    driveTrash_(files[i].id);      /* ทิ้งลงถังขยะ ไม่ลบถาวร กู้ได้ 30 วัน */
     removed++;
   }
 
-  audit(actor_(), 'BACKUP', name, 'เก็บไว้ ' + Math.min(files.length, BACKUP_KEEP) + ' ชุด, ทิ้งเก่า ' + removed + ' ชุด');
-  return { name: name, url: copy.getUrl(), kept: Math.min(files.length, BACKUP_KEEP), removed: removed };
+  var kept = Math.min(files.length, BACKUP_KEEP);
+  audit(actor_(), 'BACKUP', name, 'เก็บไว้ ' + kept + ' ชุด, ทิ้งเก่า ' + removed + ' ชุด');
+  return { name: name, id: copyId, folderId: folderId, kept: kept, removed: removed };
 }
 
 /** เมนู: สำรองข้อมูลเดี๋ยวนี้ */
@@ -78,15 +66,15 @@ function backupDatabaseUi() {
 
 /** เมนู: เปิดโฟลเดอร์สำรองข้อมูล */
 function showBackupFolder() {
-  var f = backupFolder_();
-  var files = [], it = f.getFiles();
-  while (it.hasNext()) files.push(it.next());
-  files.sort(function (a, b) { return b.getDateCreated() - a.getDateCreated(); });
+  var folderId = backupFolder_();
+  var files = driveList_(folderId, 'HRHub_');
   alert_('สำเนาที่มีอยู่ (' + files.length + ')',
-    files.slice(0, 12).map(function (x) {
-      return '• ' + x.getName() + '  (' + Utilities.formatDate(x.getDateCreated(), CFG.TZ, 'd MMM yyyy') + ')';
-    }).join('\n') +
-    '\n\nโฟลเดอร์: ' + f.getUrl());
+    (files.length
+      ? files.slice(0, 12).map(function (x) {
+          return '• ' + x.name + '  (' + String(x.createdTime).slice(0, 10) + ')';
+        }).join('\n')
+      : 'ยังไม่มีสำเนา — กด "สำรองข้อมูลเดี๋ยวนี้" เพื่อสร้างชุดแรก') +
+    '\n\nโฟลเดอร์: https://drive.google.com/drive/folders/' + folderId);
 }
 
 /*******************************************************************

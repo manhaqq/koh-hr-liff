@@ -96,7 +96,12 @@ var MENU_VARIANTS = [
  */
 function richMenuImage_(v) {
   var fileId = cfg(v.img);
-  if (fileId) return DriveApp.getFileById(fileId).getBlob();
+  if (fileId) {
+    /* ทางเก่าที่เก็บภาพไว้ใน Drive — ใช้ได้เฉพาะกับไฟล์ที่สคริปต์นี้สร้างเอง
+       เพราะสิทธิ์แคบลงเหลือ drive.file แล้ว ภาพที่คนอัปโหลดเองด้วยมือจะเปิดไม่ได้
+       ทางที่แนะนำคือลบ Script Property ตัวนี้ทิ้ง แล้วให้ระบบดึงจาก GitHub Pages แทน */
+    return driveBlob_(fileId, 'image/png');
+  }
 
   var base = cfg('RICHMENU_IMG_BASE_URL', RICHMENU_IMG_BASE_DEFAULT).replace(/\/+$/, '');
   var url  = base + '/' + v.file + '.jpg';
