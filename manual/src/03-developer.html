@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>คู่มือผู้ดูแลระบบ — โก๋ในซอย HR Hub</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<section class="cover">
+  <div class="org">ร้านโก๋ในซอย · HR Hub</div>
+  <h1>คู่มือผู้ดูแล<br>ระบบ</h1>
+  <div class="rule"></div>
+  <div class="sub">
+    สถาปัตยกรรม การปล่อยเวอร์ชัน การดูแลฐานข้อมูล การสำรองข้อมูล
+    และวิธีรับมือเมื่อระบบมีปัญหา
+  </div>
+  <div class="foot">
+    <b>สำหรับผู้พัฒนาและผู้ดูแลระบบเท่านั้น</b><br>
+    เอกสารนี้มีข้อมูลเชิงเทคนิคที่ใช้เข้าถึงระบบได้ ห้ามเผยแพร่ทั่วไป<br><br>
+    ฉบับปรับปรุง สิงหาคม 2569
+  </div>
+</section>
+
+<section class="toc">
+  <h2>สารบัญ</h2>
+  <ol>
+    <li><a href="#arch">ระบบประกอบด้วยอะไร และแต่ละส่วนอยู่ที่ไหน</a></li>
+    <li><a href="#zero">หลักการ 0 บาท — สิ่งที่ห้ามทำลาย</a></li>
+    <li><a href="#setup">ตั้งเครื่องสำหรับพัฒนา</a></li>
+    <li><a href="#release">ปล่อยเวอร์ชันใหม่ และย้อนกลับ</a></li>
+    <li><a href="#db">ฐานข้อมูล — โครงสร้างและกฎเหล็ก</a></li>
+    <li><a href="#cache">ระบบแคช — วิธีทำงานและวิธีดีบัก</a></li>
+    <li><a href="#richmenu">Rich Menu และระบบแจ้งเตือนด้วยจุดแดง</a></li>
+    <li><a href="#security">ความปลอดภัย — ปิดแล้วอะไร ยังเปิดอยู่อะไร</a></li>
+    <li><a href="#backup">สำรองข้อมูล และกู้คืนลงเครื่อง</a></li>
+    <li><a href="#incident">รับมือเหตุขัดข้อง</a></li>
+    <li><a href="#limits">โควตาและข้อจำกัดที่ต้องจำ</a></li>
+  </ol>
+</section>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="arch">ระบบประกอบด้วยอะไร และแต่ละส่วนอยู่ที่ไหน</h2>
+
+<p class="lead">
+ระบบนี้มีโค้ดอยู่ <strong>3 ที่ที่เวอร์ชันไม่ผูกกันเอง</strong>
+เข้าใจข้อนี้ก่อนอย่างอื่น เพราะเป็นที่มาของความสับสนเกือบทั้งหมดในการดูแลระบบ
+</p>
+
+<table>
+<tr><th style="width:26%">ส่วน</th><th>อยู่ที่ไหน</th><th style="width:26%">อัปเดตอย่างไร</th></tr>
+<tr>
+  <td><strong>หน้าเว็บในไลน์</strong><br>(LIFF)</td>
+  <td>ไฟล์ <code>*.html</code>, <code>app.js</code>, <code>app.css</code>, <code>config.js</code><br>
+      เผยแพร่ที่ <code>manhaqq.github.io/koh-hr-liff/</code></td>
+  <td><code>git push</code> แล้ว GitHub Pages deploy เองใน 1–2 นาที</td>
+</tr>
+<tr>
+  <td><strong>หลังบ้าน</strong><br>(Apps Script)</td>
+  <td>โฟลเดอร์ <code>apps-script/</code><br>
+      รันเป็น Web App ที่ URL ลงท้าย <code>/exec</code></td>
+  <td><code>clasp push</code> แล้วต้อง <strong>สร้างเวอร์ชันและผูก deployment</strong> อีกขั้น</td>
+</tr>
+<tr>
+  <td><strong>ฐานข้อมูล</strong></td>
+  <td>Google Sheet ไฟล์เดียว 15 แท็บ</td>
+  <td>แก้ในชีตโดยตรง — <strong>ไม่ได้อยู่ใน git</strong></td>
+</tr>
+</table>
+
+<div class="box risk">
+  <span class="lab">จุดที่พลาดกันบ่อยที่สุด</span>
+  <p><code>clasp push</code> <strong>ไม่ได้</strong> ทำให้ของจริงเปลี่ยน
+  มันแค่อัปโหลดโค้ดขึ้นไปเก็บไว้ Web App ที่พนักงานใช้ยังรันเวอร์ชันเดิมอยู่
+  จนกว่าจะสร้างเวอร์ชันใหม่แล้วชี้ deployment ไปหามัน
+  ซึ่ง <code>scripts/release.sh</code> ทำให้ครบทุกขั้นแล้ว</p>
+</div>
+
+<h3>ทำไม URL ของ deployment ห้ามเปลี่ยน</h3>
+<p>
+URL <code>/exec</code> ถูกฝังไว้ 2 ที่ที่แก้ยาก คือใน <code>config.js</code> ซึ่งเสิร์ฟให้ทุกเบราว์เซอร์
+และในช่อง Webhook URL ของ LINE Developers Console
+ถ้าสร้าง deployment ใหม่ URL จะเปลี่ยน แล้วทั้งเว็บและ webhook จะพังพร้อมกัน
+</p>
+<p>
+วิธีที่ถูกต้องคือ <strong>ชี้ deployment เดิมไปยังเวอร์ชันใหม่</strong>
+รหัส deployment ที่ใช้งานจริงถูกเขียนตายตัวไว้ในตัวแปร <code>LIVE_DEPLOYMENT</code>
+ทั้งใน <code>scripts/release.sh</code> และ <code>scripts/rollback.sh</code>
+</p>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="zero">หลักการ 0 บาท — สิ่งที่ห้ามทำลาย</h2>
+
+<p class="lead">
+แพ็กเกจฟรีของ LINE ส่งข้อความ push ได้ <strong>300 ข้อความต่อเดือน</strong>
+พนักงาน 60 คนหมายความว่าแจ้งเตือนได้เพียง <strong>5 ครั้งต่อเดือน</strong> เท่านั้น
+ระบบทั้งหมดจึงออกแบบมาเพื่อ<strong>ไม่ใช้ push เลย</strong>
+</p>
+
+<table>
+<tr><th style="width:34%">แทนที่จะ</th><th>ระบบทำแบบนี้</th><th style="width:16%">ต้นทุน</th></tr>
+<tr><td>ส่งข้อความว่ามีประกาศใหม่</td><td>สลับภาพ Rich Menu ให้ขึ้นจุดแดง</td><td>ฟรี ไม่จำกัด</td></tr>
+<tr><td>ส่งข้อความเตือนเข้ากะ</td><td>พนักงานกดเพิ่มลงปฏิทิน มือถือเตือนเอง</td><td>ฟรี</td></tr>
+<tr><td>ส่งข้อความบอก HR ว่ามีเรื่องใหม่</td><td>ส่งอีเมล</td><td>ฟรี</td></tr>
+<tr><td>ตอบข้อความในแชท</td><td>ใช้ reply token ไม่ใช่ push</td><td>ฟรี</td></tr>
+</table>
+
+<div class="box risk">
+  <span class="lab">ก่อนเพิ่มฟีเจอร์ใด ๆ ให้ถามข้อนี้เสมอ</span>
+  <p>ฟีเจอร์นี้ต้องส่งข้อความ push หรือเปล่า ถ้าใช่ <strong>แปลว่าคิดผิดทาง</strong>
+  ให้กลับไปดูว่าจะใช้จุดแดง อีเมล หรือ reply token แทนได้ไหม
+  การเผลอเพิ่ม push เพียงจุดเดียวจะทำให้โควตาหมดภายในไม่กี่วัน
+  แล้วระบบทั้งระบบจะเงียบไปทั้งเดือนโดยไม่มีใครรู้ว่าเพราะอะไร</p>
+</div>
+
+<p>
+โควตา 300 ข้อความถูกเก็บไว้ทั้งก้อนสำหรับเหตุด่วนจริง ๆ ผ่านเมนู
+<span class="kbd">🔴 ส่งด่วนเข้าแชททุกคน</span> เท่านั้น
+</p>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="setup">ตั้งเครื่องสำหรับพัฒนา</h2>
+
+<pre><code>git clone https://github.com/manhaqq/koh-hr-liff.git
+cd koh-hr-liff
+
+# เครื่องมือ sync โค้ดหลังบ้าน
+npm install -g @google/clasp
+clasp login          # ใช้บัญชี Google ที่เป็นเจ้าของ Apps Script
+
+# สร้างภาพ Rich Menu
+python3 -m pip install --user Pillow
+
+# สร้างคู่มือ PDF (ไม่จำเป็นถ้าไม่แก้คู่มือ)
+brew install pango gdk-pixbuf libffi python@3.13
+/opt/homebrew/bin/python3.13 -m venv .venv-pdf
+.venv-pdf/bin/pip install weasyprint</code></pre>
+
+<div class="box warn">
+  <span class="lab">ต้องเปิด Apps Script API ก่อนใช้ clasp push</span>
+  <p>เข้า <code>script.google.com/home/usersettings</code> แล้วเปิดสวิตช์
+  <strong>Google Apps Script API</strong> ถ้าไม่เปิด <code>clasp push</code>
+  จะขึ้น error ว่า <em>User has not enabled the Apps Script API</em>
+  ส่วนคำสั่งอ่านอย่าง <code>clasp versions</code> ยังทำงานได้ตามปกติ
+  ซึ่งทำให้เข้าใจผิดว่าตั้งค่าครบแล้ว</p>
+</div>
+
+<h3>คำสั่งที่ใช้บ่อย</h3>
+<table>
+<tr><th style="width:44%">คำสั่ง</th><th>ทำอะไร</th></tr>
+<tr><td><code>cd apps-script &amp;&amp; clasp pull</code></td><td>ดึงโค้ดหลังบ้านล่าสุดลงมา เผื่อมีคนแก้ผ่านหน้าเว็บ</td></tr>
+<tr><td><code>cd apps-script &amp;&amp; clasp push</code></td><td>อัปโหลดโค้ดขึ้นไป (ยังไม่มีผลกับของจริง)</td></tr>
+<tr><td><code>cd apps-script &amp;&amp; clasp open-script</code></td><td>เปิดหน้า Apps Script editor</td></tr>
+<tr><td><code>python3 richmenu/build.py</code></td><td>สร้างภาพเมนูทั้ง 5 แบบใหม่</td></tr>
+<tr><td><code>./scripts/release.sh v0.x.0 "คำอธิบาย"</code></td><td>ปล่อยเวอร์ชันใหม่ทั้งระบบ</td></tr>
+<tr><td><code>./scripts/rollback.sh</code></td><td>ดูเวอร์ชันที่ย้อนได้</td></tr>
+</table>
+
+<div class="box tip">
+  <span class="lab">Token และรหัสลับไม่ได้อยู่ในโค้ด</span>
+  <p>ทั้งหมดอยู่ใน Script Properties ของ Apps Script
+  (เปิด editor แล้วไปที่ ⚙️ Project Settings → Script Properties)
+  จึง commit โค้ดขึ้น GitHub แบบสาธารณะได้อย่างปลอดภัย
+  <strong>ห้ามเผลอเขียน token ลงในไฟล์โค้ดเด็ดขาด</strong></p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="release">ปล่อยเวอร์ชันใหม่ และย้อนกลับ</h2>
+
+<h3>ปล่อยเวอร์ชันใหม่</h3>
+<pre><code>./scripts/release.sh v0.4.0 "เพิ่มระบบข้อสอบ"</code></pre>
+
+<p>สคริปต์ทำ 5 ขั้นตามลำดับนี้</p>
+<ol class="steps">
+  <li>สร้างภาพ Rich Menu ใหม่จากไฟล์ออกแบบ แล้ว commit ถ้าภาพเปลี่ยน</li>
+  <li><code>clasp push</code> อัปโหลดโค้ดหลังบ้าน</li>
+  <li><code>clasp version</code> สร้างเวอร์ชันถาวรที่ย้อนกลับมาได้</li>
+  <li>ชี้ deployment เดิมไปยังเวอร์ชันใหม่ — <strong>URL ไม่เปลี่ยน</strong></li>
+  <li>ติด git tag แล้ว push ขึ้น GitHub ซึ่งจะ deploy หน้าเว็บเอง</li>
+</ol>
+
+<div class="box warn">
+  <span class="lab">หลังปล่อยเวอร์ชัน ต้องทำมืออีก 2 อย่าง</span>
+  <p><strong>1.</strong> ถ้าภาพ Rich Menu เปลี่ยน ให้เปิดชีตแล้วกดเมนู
+  <span class="kbd">🎛️ Rich Menu → สร้าง/อัปเดต Rich Menu ทั้งหมด</span></p>
+  <p><strong>2.</strong> ถ้ามีทริกเกอร์หรือ oauth scope ใหม่ ให้กดเมนู
+  <span class="kbd">⏰ ติดตั้งงานอัตโนมัติ</span> และกด Authorize ใหม่
+  <strong>ทำตอนร้านไม่ยุ่ง</strong> เพราะระหว่างที่ยังไม่ authorize ระบบจะหยุดทำงาน</p>
+</div>
+
+<h3>ย้อนกลับเวอร์ชันเก่า</h3>
+<pre><code>./scripts/rollback.sh              # ดูรายการเวอร์ชัน
+./scripts/rollback.sh v0.3.0       # ย้อนกลับ</code></pre>
+
+<p>
+ฝั่งหลังบ้าน<strong>ย้อนได้ทันทีโดยไม่ต้องแตะโค้ดเลย</strong>
+เพราะ Apps Script เก็บทุกเวอร์ชันไว้ถาวร แค่ชี้ deployment เดิมกลับไปเวอร์ชันเก่า
+ใช้เวลาไม่กี่วินาที และ URL ไม่เปลี่ยน พนักงานไม่รู้สึกว่ามีอะไรสะดุด
+</p>
+<p>
+ฝั่งหน้าเว็บใช้ <code>git revert</code> ไม่ใช่ <code>git checkout</code> แล้ว force push
+เพราะ force push จาก detached HEAD จะ<strong>ลบ commit ทั้งหมดหลังแท็กนั้นทิ้งถาวร</strong>
+ซึ่งเป็นการทำลายข้อมูล ไม่ใช่การย้อนกลับ ส่วน revert สร้าง commit ใหม่ที่ย้อนการเปลี่ยนแปลง
+ประวัติยังอยู่ครบและย้อนซ้ำได้อีก
+</p>
+
+<div class="box risk">
+  <span class="lab">สองอย่างที่สคริปต์ย้อนให้ไม่ได้</span>
+  <p><strong>ข้อมูลและโครงสร้างในชีต</strong> — ถ้าเวอร์ชันที่แล้วเพิ่มหรือย้ายคอลัมน์
+  ต้องกู้เองจาก <span class="kbd">ไฟล์ → ประวัติเวอร์ชัน</span> ในชีต หรือจากไฟล์สำรองรายสัปดาห์</p>
+  <p><strong>ภาพ Rich Menu</strong> — ต้องกดเมนูสร้างใหม่เองในชีต</p>
+  <p>แปลว่าถ้าการเปลี่ยนแปลงรอบนั้นแตะโครงสร้างชีต <strong>ต้องสำรองชีตก่อนปล่อยเวอร์ชันเสมอ</strong></p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="db">ฐานข้อมูล — โครงสร้างและกฎเหล็ก</h2>
+
+<h3>แท็บทั้งหมด</h3>
+<table>
+<tr><th style="width:30%">กลุ่ม</th><th>แท็บ</th></tr>
+<tr><td><strong>คนกรอกเอง</strong></td>
+    <td><code>Employees</code> <code>OrgChart</code> <code>Announcements</code> <code>Handbook</code>
+        <code>AppGuide</code> <code>ShiftPattern</code> <code>Schedule</code> <code>Shifts</code>
+        <code>Reports</code> <code>FAQ</code> <code>Settings</code></td></tr>
+<tr><td><strong>ระบบเขียนเอง</strong><br>(ห้ามลบคอลัมน์)</td>
+    <td><code>Tickets</code> <code>Leave</code> <code>AuditLog</code> <code>BroadcastLog</code></td></tr>
+</table>
+
+<h3>กฎเหล็ก 6 ข้อ</h3>
+<ol class="steps">
+  <li><strong>ห้ามเปลี่ยนชื่อคอลัมน์แถวที่ 1</strong> — โค้ดอ่านชื่อคอลัมน์ตรง ๆ
+      เปลี่ยนเมื่อไหร่ฟิลด์นั้นจะกลายเป็นค่าว่างแบบเงียบ ๆ ระบบยังทำงานต่อได้แต่ข้อมูลหายหมด
+      ซึ่งหาสาเหตุยากมาก</li>
+  <li><strong>ห้ามลบแถวพนักงานที่ลาออก</strong> — กฎหมายแรงงานไทยให้เก็บทะเบียนลูกจ้างอย่างน้อย 2 ปี
+      ให้ใช้เมนูตัดสิทธิ์แทน</li>
+  <li><strong>ห้ามใส่เลขบัตรประชาชน</strong> — เก็บได้แค่เบอร์โทร 4 ตัวท้ายในคอลัมน์ <code>phoneLast4</code></li>
+  <li><strong>ห้ามใส่เงินเดือน</strong> — ให้แยกไฟล์ที่จำกัดสิทธิ์ต่างหาก</li>
+  <li><strong>ห้ามแชร์แบบ "ทุกคนที่มีลิงก์"</strong> — เฉพาะ HR และผู้บริหาร</li>
+  <li><strong><code>lineUserId</code> ห้ามออกนอกไฟล์นี้</strong> — เป็นข้อมูลส่วนบุคคลตาม PDPA
+      ห้ามส่งกลับใน API ห้ามแสดงบนหน้าจอ ห้ามเขียนลง log ห้ามใส่ในข้อความ error</li>
+</ol>
+
+<h3>เพิ่มคอลัมน์หรือแท็บใหม่</h3>
+<p>
+เพิ่มได้ แต่<strong>ต่อท้ายเท่านั้น</strong> ห้ามแทรกตรงกลางและห้ามสลับลำดับ
+และให้เขียนฟังก์ชัน <code>ensureXxxSheets()</code> ของตัวเองที่สร้างแท็บเฉพาะเมื่อยังไม่มี
+</p>
+<div class="box risk">
+  <span class="lab">อย่าใช้ initDatabase() เพื่อเพิ่มคอลัมน์</span>
+  <p><code>initDatabase()</code> เขียนทับแถวที่ 1 ถ้าโครงสร้างจริงไม่ตรงกับที่โค้ดคาดไว้
+  หัวคอลัมน์อาจถูกเขียนผิดตำแหน่ง แล้วข้อมูลทั้งแท็บจะอ่านผิดทั้งหมด
+  <strong>ต้องสำรองชีตทั้งไฟล์ก่อนรันเสมอ</strong></p>
+</div>
+
+<h3>เรื่องวันที่ที่ต้องระวัง</h3>
+<p>
+Google Sheets มักแปลงข้อความ <code>2026-08-25</code> เป็นวันที่จริงโดยอัตโนมัติ
+แล้วแสดงตามรูปแบบภาษาของไฟล์ เช่น <code>25/8/2026</code> ซึ่งจะทำให้การเปรียบเทียบวันที่พังทั้งระบบ
+ฟังก์ชัน <code>cellToString_()</code> ใน <code>02_Data.js</code> จึงบังคับให้ทุกวันที่กลับมาเป็น
+<code>yyyy-MM-dd</code> และเวลาเป็น <code>HH:mm</code> เสมอ <strong>อย่าถอดออก</strong>
+</p>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="cache">ระบบแคช — วิธีทำงานและวิธีดีบัก</h2>
+
+<p class="lead">
+เดิม <code>readTable()</code> อ่านทั้งแท็บใหม่ทุกครั้งที่ถูกเรียก
+และการเปิดหน้าเดียวอาจอ่านแท็บเดิมซ้ำหลายรอบ ซึ่งเป็นสาเหตุหลักที่ระบบช้า
+ตอนนี้มีแคช 2 ชั้นทับอยู่
+</p>
+
+<table>
+<tr><th style="width:24%">ชั้น</th><th>ขอบเขต</th><th style="width:22%">อายุ</th></tr>
+<tr><td><strong>memo ในหน่วยความจำ</strong></td><td>กันการอ่านซ้ำภายในการทำงานรอบเดียว</td><td>จบเมื่อ request จบ</td></tr>
+<tr><td><strong>CacheService</strong></td><td>กันการอ่านซ้ำข้ามคำขอ แบ่งเก็บเป็นชิ้น ๆ</td><td>5 นาที</td></tr>
+</table>
+
+<h3>แคชถูกล้างเมื่อไหร่</h3>
+<p>คีย์ของแคชผูกกับ "เลขเวอร์ชันของตาราง" การล้างจึงทำโดยเปลี่ยนเลขนั้น ซึ่งเกิดได้ 3 ทาง</p>
+<ol class="steps">
+  <li><strong>ตอนโค้ดเขียนข้อมูล</strong> — <code>appendRow()</code> และ <code>updateRow()</code>
+      เรียก <code>bumpTableVersion_()</code> ให้เอง</li>
+  <li><strong>ตอนคนแก้ชีตด้วยมือ</strong> — ทริกเกอร์ <code>onEditInvalidateCache</code>
+      ★ ข้อนี้สำคัญที่สุด เพราะ HR แก้ชีตโดยตรงเป็นเรื่องปกติของระบบนี้ ซึ่งไม่ผ่านโค้ดฝั่งเขียนเลย</li>
+  <li><strong>อายุหมดเอง</strong> — กันพลาดถ้าสองข้อบนไม่ทำงาน</li>
+</ol>
+
+<div class="box warn">
+  <span class="lab">อาการ "แก้ในชีตแล้ว แต่หน้าเว็บยังเป็นข้อมูลเก่า"</span>
+  <p>เกือบทุกครั้งแปลว่าทริกเกอร์ <code>onEditInvalidateCache</code> ไม่ได้ติดตั้ง
+  ให้เปิดชีตแล้วกด <span class="kbd">⏰ ติดตั้งงานอัตโนมัติ</span> ใหม่
+  หรือถ้าต้องการล้างทันทีทั้งหมด ให้รันฟังก์ชัน <code>clearAllTableCache()</code> ใน editor</p>
+  <p>ถ้าอยากอ่านข้ามแคชในโค้ด ใช้ <code>readTable(ชื่อแท็บ, true)</code></p>
+</div>
+
+<h3>ทำไม updateRow ยังเขียนทีละเซลล์</h3>
+<p>
+ดูเหมือนช้าและน่าจะรวบเป็นครั้งเดียวได้ แต่ทำไม่ได้โดยตั้งใจ
+เพราะบางแท็บมีคอลัมน์สรุปที่เป็น<strong>สูตร</strong>
+ถ้าอ่านทั้งแถวแล้วเขียนกลับด้วย <code>setValues</code> สูตรจะถูกทับด้วยค่าคงที่และหายไปถาวร
+</p>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="richmenu">Rich Menu และระบบแจ้งเตือนด้วยจุดแดง</h2>
+
+<p>ระบบใช้เมนู 5 ชุด การสลับระหว่างชุดคือ "ระบบแจ้งเตือน" ทั้งหมดของเรา</p>
+<table>
+<tr><th style="width:22%">ชุด</th><th>ใช้กับใคร</th></tr>
+<tr><td><code>guest</code></td><td>คนที่ยังไม่ยืนยันตัวตน เห็นแค่ปุ่มยืนยันตัวตน — เป็นด่านกันคนนอก</td></tr>
+<tr><td><code>main</code></td><td>พนักงานปกติ ไม่มีอะไรใหม่</td></tr>
+<tr><td><code>main-n</code></td><td>มีประกาศใหม่ — จุดแดงที่ปุ่มประกาศ</td></tr>
+<tr><td><code>main-h</code></td><td>HR ตอบเรื่องแล้ว — จุดแดงที่การ์ดติดต่อ HR</td></tr>
+<tr><td><code>main-nh</code></td><td>มีทั้งสองอย่าง</td></tr>
+</table>
+
+<h3>เปลี่ยนภาพเมนู</h3>
+<pre><code>cp ~/Downloads/เมนูใหม่.png richmenu/src/base.png   # ต้องเป็น 2500 x 1686
+python3 richmenu/build.py
+git add richmenu &amp;&amp; git commit -m "เมนูใหม่" &amp;&amp; git push</code></pre>
+<p>แล้วเปิดชีตกดเมนู <span class="kbd">🎛️ Rich Menu → สร้าง/อัปเดต Rich Menu ทั้งหมด</span></p>
+
+<div class="box risk">
+  <span class="lab">ถ้าย้ายตำแหน่งปุ่มในภาพ ต้องแก้พิกัดด้วยเสมอ</span>
+  <p>พิกัดปุ่มอยู่ที่ <code>richMenuMainObject_</code> ใน <code>apps-script/08_RichMenu.js</code>
+  และ<strong>ไม่ได้ผูกกับภาพเลย</strong> ถ้าอัปโหลดภาพใหม่โดยไม่แก้พิกัด
+  กดโลโก้จะกลายเป็นเปิดประกาศ กดประกาศจะเปิดคู่มือ สลับกันหมดทั้ง 60 คน
+  โดย<strong>ไม่มี error อะไรขึ้นมาเลย</strong> ไม่มีเทสต์ตัวไหนจับได้ ต้องเปิดไลน์กดดูเองทุกปุ่ม</p>
+</div>
+
+<p>
+ภาพดึงจาก GitHub Pages โดยตรง ไม่ต้องตั้ง Drive File ID ทีละไฟล์อีกแล้ว
+เปลี่ยนที่เก็บได้ด้วย Script Property ชื่อ <code>RICHMENU_IMG_BASE_URL</code>
+</p>
+<p>
+ข้อจำกัดของ LINE คือภาพต้อง<strong>ไม่เกิน 1 MB ต่อไฟล์</strong>
+<code>build.py</code> จึงบันทึกเป็น JPEG คุณภาพ 92 ซึ่งได้ประมาณ 365 KB
+ถ้าภาพใหม่ใหญ่เกิน ให้ลดค่า <code>QUALITY</code> ใน <code>build.py</code>
+</p>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="security">ความปลอดภัย — ปิดแล้วอะไร ยังเปิดอยู่อะไร</h2>
+
+<h3>ปิดไปแล้ว</h3>
+<h4>Formula injection ในชีต</h4>
+<p>
+Google Sheets ถือว่าข้อความที่ขึ้นต้นด้วย <code>=</code> <code>+</code> <code>-</code> <code>@</code>
+คือ<strong>สูตร</strong> ไม่ใช่ข้อความ ผู้โจมตีที่มีแค่บัญชี LINE (ไม่ต้องเป็นพนักงาน)
+จึงตั้งชื่อ LINE ตัวเองเป็นสูตร <code>IMPORTXML</code> ที่อ่านทั้งแท็บ <code>Employees</code>
+แล้วส่งออกไปเว็บของตัวเองได้ พอ HR เปิดชีต สูตรทำงานเองทันทีโดยไม่ต้องกดอะไร
+</p>
+<p>
+ปิดด้วย <code>safeCell_()</code> ใน <code>02_Data.js</code> ที่เติม <code>'</code> นำหน้าค่าที่ขึ้นต้นด้วยอักขระเหล่านั้นก่อนเขียนทุกครั้ง
+<strong>ทุกการเขียนต้องผ่าน <code>appendRow()</code> หรือ <code>updateRow()</code> เท่านั้น</strong>
+ห้ามเรียก <code>setValue()</code> ใส่ข้อมูลจากผู้ใช้โดยตรง เพราะจะเปิดช่องโหว่นี้กลับมา
+</p>
+
+<h4>ขอบเขตสิทธิ์ Google Drive</h4>
+<p>
+เดิมใช้ <code>drive.readonly</code> ซึ่งให้สิทธิ์อ่าน Drive <strong>ทั้งบัญชี</strong>ของเจ้าของ
+บน Web App ที่เปิดให้เข้าถึงแบบไม่ระบุตัวตน ตอนนี้แคบลงเหลือ <code>drive.file</code>
+ซึ่งเข้าถึงได้เฉพาะไฟล์ที่สคริปต์สร้างเอง
+</p>
+
+<h3>ยังเปิดอยู่ — ต้องตัดสินใจ</h3>
+<div class="box risk">
+  <span class="lab">การตรวจลายเซ็น webhook ไม่เคยทำงานเลย</span>
+  <p>โค้ดใน <code>05_Webhook.js</code> อ่านลายเซ็นจาก query string
+  แต่ LINE ส่งมาใน HTTP header <code>x-line-signature</code> ซึ่ง <code>doPost</code>
+  ของ Apps Script อ่านไม่ได้ ตัวแปรจึงเป็น <code>null</code> เสมอ
+  และเงื่อนไขตรวจสอบไม่เคยทำงาน</p>
+  <p>ผลคือใครที่รู้ URL <code>/exec</code> (ซึ่งอยู่ใน <code>config.js</code>
+  ที่เสิร์ฟให้ทุกเบราว์เซอร์) สามารถปลอมเหตุการณ์ได้ เขาจะไม่ได้ข้อมูลกลับไป
+  แต่สั่งล้างจุดแดงของพนักงานคนอื่น และเขียนแถวขยะลง <code>AuditLog</code> ได้ไม่จำกัด</p>
+  <p><strong>วิธีแก้:</strong> วาง Cloudflare Worker (ประมาณ 20 บรรทัด ฟรี) คั่นหน้า
+  <code>/exec</code> ให้ตรวจลายเซ็นแล้วส่งต่อ โดยแนบลายเซ็นมาเป็น <code>?sig=</code>
+  ซึ่งเป็นสิ่งที่โค้ดปัจจุบันรออยู่แล้ว — ท่อต่อไว้ครบแล้ว ขาดแค่ตัว proxy</p>
+</div>
+
+<h3>สิ่งที่ออกแบบไว้ดีแล้ว อย่าไปรื้อ</h3>
+<ul>
+  <li>ทุกคำขอ API ตรวจ ID token กับ LINE ที่เดียวก่อนเข้า switch จึงไม่มี endpoint ไหนลืมตรวจได้</li>
+  <li>ตัวตนถูกดึงจาก token ฝั่งเซิร์ฟเวอร์เสมอ ไม่เคยเชื่อ <code>empCode</code> ที่ส่งมาจาก client</li>
+  <li><code>publicEmp_()</code> คัดเฉพาะฟิลด์ที่อนุญาต และเขียนคอมเมนต์ระบุชัดว่าไม่ส่งอะไรบ้าง</li>
+  <li>ผังองค์กรตัดสถานะพนักงานทิ้ง 2 ชั้น เพื่อไม่ให้คนอื่นรู้ว่าเพื่อนถูกพักงาน</li>
+  <li>หน้ายืนยันตัวตนตอบข้อความผิดพลาดเหมือนกันหมดทุกกรณี เพื่อไม่ให้ใช้เดารายชื่อพนักงานได้
+      และไม่รวมคนที่ลาออกแล้ว เพื่อไม่ให้ยืนยันได้ว่าใครเคยทำงานที่นี่</li>
+  <li>รายงานที่ต้องใช้สิทธิ์ ตรวจ role ซ้ำในโค้ดอีกชั้น ไม่เชื่อคอลัมน์ <code>audience</code> ในชีตอย่างเดียว
+      เพราะ HR แก้ชีตนั้นได้ และการพิมพ์ผิดไม่ควรกลายเป็นข้อมูลรั่ว</li>
+</ul>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="backup">สำรองข้อมูล และกู้คืนลงเครื่อง</h2>
+
+<div class="box risk">
+  <span class="lab">ประวัติเวอร์ชันของ Google Sheets ไม่ใช่การสำรองข้อมูล</span>
+  <p>มันอยู่ในไฟล์เดียวกันและ<strong>ตายไปพร้อมกับบัญชี</strong>
+  ถ้าบัญชีถูกระงับ ถูกลบ หรือคนที่ถือบัญชีลาออก ข้อมูลหายทั้งหมดพร้อมกัน
+  ในขณะที่กฎหมายแรงงานไทยกำหนดให้เก็บทะเบียนลูกจ้างอย่างน้อย 2 ปี</p>
+</div>
+
+<h3>สามชั้นที่ควรมี</h3>
+<table>
+<tr><th style="width:12%">ชั้น</th><th style="width:32%">อะไร</th><th>ความถี่ / สถานะ</th></tr>
+<tr><td><strong>1</strong></td><td>สำเนาใน Google Drive</td>
+    <td>อัตโนมัติทุกอาทิตย์ 03:00 เก็บ 8 ชุด — <strong>ทำแล้ว</strong></td></tr>
+<tr><td><strong>2</strong></td><td>ดาวน์โหลดลงเครื่อง</td>
+    <td>ทุกไตรมาส ทำมือ — ดูขั้นตอนด้านล่าง</td></tr>
+<tr><td><strong>3</strong></td><td>เจ้าของบัญชีสำรอง</td>
+    <td><strong>ยังไม่ได้ทำ</strong> — ดูคำเตือนท้ายหัวข้อ</td></tr>
+</table>
+
+<h3>ชั้นที่ 1 — สำเนาอัตโนมัติใน Drive</h3>
+<p>
+ฟังก์ชัน <code>backupDatabase()</code> ใน <code>apps-script/12_Backup.js</code>
+คัดลอกทั้งไฟล์ไปยังโฟลเดอร์ <em>สำรองฐานข้อมูล HR Hub</em> ทุกอาทิตย์
+เก็บไว้ 8 ชุด (ประมาณ 2 เดือน) ชุดที่เกินจะถูกทิ้งลงถังขยะ ไม่ลบถาวร จึงกู้ได้อีก 30 วัน
+</p>
+<p>สั่งทำเดี๋ยวนี้ได้จากเมนู <span class="kbd">💾 สำรองข้อมูล → สำรองข้อมูลเดี๋ยวนี้</span></p>
+
+<h3>ชั้นที่ 2 — ดาวน์โหลดลงเครื่อง (ทำทุกไตรมาส)</h3>
+<ol class="steps">
+  <li>เปิดชีตต้นฉบับ</li>
+  <li>เมนู <span class="kbd">ไฟล์ → ดาวน์โหลด → Microsoft Excel (.xlsx)</span></li>
+  <li>เปลี่ยนชื่อไฟล์เป็น <code>HRHub_2569-Q3.xlsx</code> แล้วเก็บไว้ในฮาร์ดดิสก์
+      หรือไดรฟ์ภายนอกที่<strong>ไม่ได้ซิงก์กับบัญชี Google เดิม</strong></li>
+  <li>เปิดไฟล์ที่ดาวน์โหลดมาดูสักครั้งว่าอ่านได้จริง — สำเนาที่เปิดไม่ได้ไม่ใช่สำเนา</li>
+</ol>
+
+<div class="box warn">
+  <span class="lab">ทำไมชั้นที่ 2 จำเป็นทั้งที่มีชั้นที่ 1 แล้ว</span>
+  <p>สำเนาในชั้นที่ 1 ยังอยู่ใน<strong>บัญชี Google เดียวกัน</strong>กับต้นฉบับ
+  ถ้าบัญชีมีปัญหา สำเนาก็หายไปพร้อมกันทั้งหมด
+  สำเนาที่อยู่นอกบัญชีเท่านั้นที่ป้องกันกรณีนี้ได้</p>
+</div>
+
+<h3>ทำให้ชั้นที่ 2 อัตโนมัติ (ถ้าอยาก)</h3>
+<p>ใช้ <code>rclone</code> ซิงก์โฟลเดอร์สำรองลงเครื่องได้</p>
+<pre><code>brew install rclone
+rclone config                      # เลือก Google Drive แล้วตั้งชื่อ remote ว่า gdrive
+
+rclone sync "gdrive:สำรองฐานข้อมูล HR Hub" ~/Backups/kohnaisoi-hrhub \
+  --drive-export-formats xlsx --progress</code></pre>
+<p>แล้วตั้งให้รันเองทุกสัปดาห์ด้วย <code>launchd</code> หรือ <code>cron</code></p>
+
+<h3>กู้คืนข้อมูล</h3>
+<ol class="steps">
+  <li>เปิดสำเนาที่ต้องการใน Drive แล้วเลือก <span class="kbd">ไฟล์ → สร้างสำเนา</span></li>
+  <li>คัดลอก ID ของไฟล์ใหม่จาก URL</li>
+  <li>เปิด Apps Script → ⚙️ Project Settings → Script Properties
+      แล้วเปลี่ยนค่า <code>SPREADSHEET_ID</code> ให้ชี้ไฟล์ใหม่</li>
+  <li>รัน <code>clearAllTableCache()</code> เพื่อล้างแคชของไฟล์เก่า</li>
+  <li>เปิดชีตใหม่แล้วกด <span class="kbd">② ตรวจสอบการตั้งค่า</span> ว่าครบทุกรายการ</li>
+  <li>ทดสอบเปิดหน้าเว็บจากไลน์จริงหนึ่งครั้งก่อนประกาศให้พนักงานใช้</li>
+</ol>
+
+<div class="box risk">
+  <span class="lab">ความเสี่ยงที่ยังไม่มีใครแก้ได้นอกจากเจ้าของ</span>
+  <p>ทั้งชีต สคริปต์ ทริกเกอร์ โควตาอีเมล และโฟลเดอร์สำรอง
+  อยู่ใน<strong>บัญชี Gmail ส่วนบุคคลบัญชีเดียวทั้งหมด</strong>
+  บัญชีส่วนบุคคลไม่มีผู้ดูแลระดับองค์กร ไม่มีผู้ติดต่อสำรอง
+  ถ้าบัญชีถูกระงับหรือคนที่ถือลาออก ร้านจะเข้าถึงข้อมูลไม่ได้อีกเลย</p>
+  <p>ควรทำอย่างน้อยหนึ่งข้อ — เพิ่มบัญชีที่สองเป็นเจ้าของร่วมของทั้งชีตและ Apps Script project,
+  ย้ายไปใช้ Google Workspace ของร้านซึ่งกู้บัญชีได้จากผู้ดูแล,
+  หรือตั้งผู้ติดต่อสำรองในบัญชี Google</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="incident">รับมือเหตุขัดข้อง</h2>
+
+<h3>พนักงานทุกคนเปิดหน้าเว็บไม่ได้</h3>
+<ol class="steps">
+  <li>ทดสอบ URL หลังบ้านก่อน — เปิดชีตแล้วกด <span class="kbd">③ 🩺 ตรวจ Webhook URL</span></li>
+  <li>ถ้าขึ้น error เรื่องสิทธิ์ แปลว่า oauth scope เปลี่ยนแล้วยังไม่ได้ authorize
+      ให้เปิด Apps Script editor รันฟังก์ชันอะไรก็ได้หนึ่งครั้งแล้วกดยอมรับ</li>
+  <li>ถ้ายังไม่หาย ให้ย้อนหลังบ้านกลับเวอร์ชันก่อนหน้า
+      <code>./scripts/rollback.sh</code> — ใช้เวลาไม่กี่วินาทีและ URL ไม่เปลี่ยน</li>
+  <li>ดู execution log ใน Apps Script editor เพื่อหาสาเหตุที่แท้จริงทีหลัง</li>
+</ol>
+
+<h3>กดปุ่มในเมนูไลน์แล้วไปผิดหน้า</h3>
+<p>
+แปลว่าอัปโหลดภาพเมนูใหม่โดยไม่ได้แก้พิกัดใน <code>richMenuMainObject_</code>
+ให้แก้พิกัดให้ตรงกับภาพ แล้วกดสร้างเมนูใหม่ทั้งหมด
+</p>
+
+<h3>จุดแดงไม่ขึ้น ทั้งที่มีประกาศใหม่</h3>
+<ol class="steps">
+  <li>เปิดชีตกด <span class="kbd">🎛️ Rich Menu → ดูรายการ Rich Menu ปัจจุบัน</span>
+      ตรวจว่ามีครบทั้ง 5 ชุดและ ID ถูกบันทึกไว้</li>
+  <li>ถ้าขาดชุดใดชุดหนึ่ง การติดจุดแดงจะไม่ทำงานแบบเงียบ ๆ
+      ให้กด <span class="kbd">สร้าง/อัปเดต Rich Menu ทั้งหมด</span></li>
+  <li>ถ้ายังไม่ขึ้นเฉพาะบางคน ให้กด <span class="kbd">🔄 ล้างจุดแดงทุกคน</span> แล้วลองใหม่</li>
+</ol>
+
+<h3>แก้ในชีตแล้วหน้าเว็บยังเป็นข้อมูลเก่า</h3>
+<p>
+ทริกเกอร์ล้างแคชไม่ได้ติดตั้ง กด <span class="kbd">⏰ ติดตั้งงานอัตโนมัติ</span> ใหม่
+หรือรัน <code>clearAllTableCache()</code> เพื่อล้างทันที
+</p>
+
+<h3>ตารางกะที่หัวหน้าแก้หายไป</h3>
+<p>
+เป็นพฤติกรรมของ <code>generateScheduleFromPattern()</code> ซึ่งเก็บแถวไว้เฉพาะเมื่อคอลัมน์
+<code>status</code> เป็นคำว่า <code>manual</code> ตัวพิมพ์เล็กเป๊ะ ๆ เท่านั้น
+แถวอื่นในช่วงที่สร้างใหม่จะถูกลบและสร้างจาก <code>ShiftPattern</code> ทั้งหมด
+</p>
+<p>
+กู้ได้จาก <span class="kbd">ไฟล์ → ประวัติเวอร์ชัน</span> ในชีต ถ้าเพิ่งเกิด
+หรือจากไฟล์สำรองรายสัปดาห์
+</p>
+
+<h3>ระบบเงียบไปทั้งเดือน ไม่มีใครได้รับแจ้งเตือน</h3>
+<p>
+ตรวจโควตาข้อความก่อนที่ <span class="kbd">📊 สรุปการใช้งาน / โควตาข้อความ</span>
+ถ้าใช้หมด 300 แล้วแปลว่ามีโค้ดที่ส่ง push แอบอยู่ ให้ค้นหาคำว่า <code>push</code>
+ในโฟลเดอร์ <code>apps-script/</code> แล้วเอาออก
+</p>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="limits">โควตาและข้อจำกัดที่ต้องจำ</h2>
+
+<table>
+<tr><th style="width:38%">ข้อจำกัด</th><th style="width:20%">ค่า</th><th>ผลถ้าชน</th></tr>
+<tr><td>ข้อความ push ของ LINE (แพ็กเกจฟรี)</td><td>300 / เดือน</td><td>ส่งไม่ได้เลยและซื้อเพิ่มไม่ได้</td></tr>
+<tr><td>ขนาดภาพ Rich Menu</td><td>1 MB / ไฟล์</td><td>LINE ปฏิเสธการอัปโหลด</td></tr>
+<tr><td>เวลาทำงานของ Apps Script ต่อครั้ง</td><td>6 นาที</td><td>งานถูกตัดกลางคัน ข้อมูลอาจค้างครึ่ง ๆ</td></tr>
+<tr><td>CacheService ต่อคีย์</td><td>100 KB</td><td>เก็บไม่ได้ จึงต้องแบ่งเป็นชิ้น</td></tr>
+<tr><td>CacheService อายุสูงสุด</td><td>6 ชั่วโมง</td><td>แคชหมดอายุแล้วอ่านใหม่</td></tr>
+<tr><td>PropertiesService ต่อค่า</td><td>9 KB</td><td>เก็บ JSON ก้อนใหญ่ไม่ได้</td></tr>
+<tr><td>อีเมลจาก MailApp ต่อวัน</td><td>100 ฉบับ</td><td>อีเมลแจ้ง HR หยุดส่ง</td></tr>
+<tr><td>เซลล์ทั้งหมดใน Google Sheet</td><td>10 ล้าน</td><td>เขียนเพิ่มไม่ได้ — ยังห่างมาก</td></tr>
+<tr><td>ความยาวข้อความในเซลล์</td><td>50,000 ตัวอักษร</td><td>ข้อความถูกตัด</td></tr>
+</table>
+
+<h3>เวลาตอบสนองที่วัดได้จริง</h3>
+<table>
+<tr><th style="width:44%">ปลายทาง</th><th>เวลา</th></tr>
+<tr><td>Apps Script <code>/exec</code></td><td>~1,900 ms (มี redirect 1 ครั้ง = 2 การเชื่อมต่อ)</td></tr>
+<tr><td>GitHub Pages (CDN)</td><td>~33 ms เมื่ออุ่นแล้ว, ~590 ms ครั้งแรก</td></tr>
+</table>
+<p>
+ต่างกันประมาณ <strong>50 เท่า</strong> นี่คือเหตุผลที่ข้อมูลซึ่งไม่ค่อยเปลี่ยน
+อย่างคู่มือ คำถามที่พบบ่อย และคู่มือแอป ควรถูกเสิร์ฟจาก GitHub Pages
+แทนที่จะเรียกผ่าน Apps Script ทุกครั้ง
+</p>
+
+<hr>
+<p style="font-size:9.5pt;color:#6B5947">
+เอกสารนี้อธิบายระบบ ณ สิงหาคม 2569 เมื่อแก้ระบบแล้วกรุณาปรับคู่มือด้วย
+ไฟล์ต้นฉบับอยู่ที่ <code>manual/src/03-developer.html</code>
+สร้าง PDF ใหม่ด้วย <code>.venv-pdf/bin/python manual/build.py</code>
+</p>
+
+</body>
+</html>
