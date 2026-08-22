@@ -187,7 +187,7 @@ async function renderMyTickets() {
       </div>
       <div class="strong" style="font-size:15px;line-height:1.45">${esc(t.subject)}</div>
       <div class="tiny" style="margin-top:4px">${esc(t.category)} • ส่งเมื่อ ${esc(String(t.createdAt).slice(0, 10))}</div>
-      ${t.reply ? `<div style="margin-top:11px;padding:12px 14px;background:#F2F7F4;border-radius:10px;border-left:3px solid var(--primary)">
+      ${t.reply ? `<div style="margin-top:11px;padding:12px 14px;background:#FBF5EE;border-radius:10px;border-left:3px solid var(--primary)">
         <div class="eyebrow" style="margin-bottom:4px">คำตอบจาก HR</div>
         <div style="font-size:13.5px;line-height:1.7">${nl2br(t.reply)}</div></div>`
         : `<div class="tiny" style="margin-top:9px;color:var(--warn)">⏳ รอ HR ดำเนินการ • กำหนด ${esc(t.slaDue || '-')}</div>`}

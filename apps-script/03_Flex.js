@@ -36,7 +36,7 @@ function fxBtn_(label, action, style, color) {
 function fxUri_(label, url)            { return { type: 'uri', label: label, uri: url }; }
 function fxPost_(label, data, display) { return { type: 'postback', label: label, data: data, displayText: display || undefined }; }
 
-function fxDivider_() { return { type: 'separator', margin: 'lg', color: '#E6E2D6' }; }
+function fxDivider_() { return { type: 'separator', margin: 'lg', color: '#EADFD0' }; }
 
 function fx_(altText, bubbleOrCarousel) {
   return { type: 'flex', altText: altText, contents: bubbleOrCarousel };
@@ -138,16 +138,16 @@ function flexHandbookMenu() {
   bubbles.unshift({
     type: 'bubble', size: 'micro',
     body: {
-      type: 'box', layout: 'vertical', paddingAll: '14px', backgroundColor: '#FBF2DE', spacing: 'sm',
+      type: 'box', layout: 'vertical', paddingAll: '14px', backgroundColor: '#FBF0DC', spacing: 'sm',
       contents: [
         { type: 'text', text: '📱', size: 'xl' },
-        { type: 'text', text: 'คู่มือแอป myHR Cloud', weight: 'bold', size: 'sm', color: '#8A6D1F', wrap: true },
-        { type: 'text', text: 'ลงเวลา ลางาน แลกกะ ขอเอกสาร แก้ปัญหา', size: 'xxs', color: '#A08444', wrap: true, maxLines: 4 }
+        { type: 'text', text: 'คู่มือแอป myHR Cloud', weight: 'bold', size: 'sm', color: '#96631A', wrap: true },
+        { type: 'text', text: 'ลงเวลา ลางาน แลกกะ ขอเอกสาร แก้ปัญหา', size: 'xxs', color: '#B98A45', wrap: true, maxLines: 4 }
       ]
     },
     footer: {
-      type: 'box', layout: 'vertical', paddingAll: '10px', backgroundColor: '#FBF2DE',
-      contents: [ fxBtn_('เปิดคู่มือแอป', fxPost_('เปิดคู่มือแอป', 'action=appguide', 'คู่มือแอป myHR Cloud'), 'primary', '#8A6D1F') ]
+      type: 'box', layout: 'vertical', paddingAll: '10px', backgroundColor: '#FBF0DC',
+      contents: [ fxBtn_('เปิดคู่มือแอป', fxPost_('เปิดคู่มือแอป', 'action=appguide', 'คู่มือแอป myHR Cloud'), 'primary', '#96631A') ]
     }
   });
 
@@ -155,7 +155,7 @@ function flexHandbookMenu() {
   bubbles.splice(1, 0, {
     type: 'bubble', size: 'micro',
     body: {
-      type: 'box', layout: 'vertical', paddingAll: '14px', backgroundColor: '#EAF3EE', spacing: 'sm',
+      type: 'box', layout: 'vertical', paddingAll: '14px', backgroundColor: '#F6EEE4', spacing: 'sm',
       contents: [
         { type: 'text', text: '🏢', size: 'xl' },
         { type: 'text', text: 'ผังองค์กร', weight: 'bold', size: 'sm', color: C.primary, wrap: true },
@@ -163,7 +163,7 @@ function flexHandbookMenu() {
       ]
     },
     footer: {
-      type: 'box', layout: 'vertical', paddingAll: '10px', backgroundColor: '#EAF3EE',
+      type: 'box', layout: 'vertical', paddingAll: '10px', backgroundColor: '#F6EEE4',
       contents: [ fxBtn_('เปิดผังองค์กร', fxPost_('เปิดผังองค์กร', 'action=org', 'ผังองค์กร'), 'primary', C.primary) ]
     }
   });
@@ -279,11 +279,11 @@ function flexHrMenu() {
         ]},
         fxDivider_(),
         { type: 'box', layout: 'vertical', margin: 'lg', paddingAll: '12px', cornerRadius: '8px',
-          backgroundColor: '#FDF6E3', spacing: 'xs', contents: [
-          { type: 'text', text: '🔒 ร้องเรียนแบบเป็นความลับ', size: 'sm', weight: 'bold', color: '#8A6D1F', wrap: true },
-          { type: 'text', size: 'xxs', color: '#8A6D1F', wrap: true,
+          backgroundColor: '#FDF6E9', spacing: 'xs', contents: [
+          { type: 'text', text: '🔒 ร้องเรียนแบบเป็นความลับ', size: 'sm', weight: 'bold', color: '#96631A', wrap: true },
+          { type: 'text', size: 'xxs', color: '#96631A', wrap: true,
             text: 'เรื่องคุกคาม กลั่นแกล้ง หรือทุจริต ส่งตรงถึงฝ่ายบริหาร ไม่ผ่านหัวหน้าสาขา และเลือก “ไม่ระบุตัวตน” ได้' },
-          { type: 'button', style: 'primary', height: 'sm', color: '#8A6D1F', margin: 'sm',
+          { type: 'button', style: 'primary', height: 'sm', color: '#96631A', margin: 'sm',
             action: fxUri_('ส่งเรื่องร้องเรียน', liffUrl(CFG.liff.hr, 'cat=complaint')) }
         ]}
       ]

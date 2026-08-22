@@ -24,13 +24,14 @@ window.KOH_CONFIG = {
   ORG_SHORT:  'โก๋ในซอย',
   TAGLINE:    'HR Communication Hub',
 
-  /* 4) สีแบรนด์ — เปลี่ยนที่นี่ได้เลย */
+  /* 4) สีแบรนด์ — ต้องตรงกับ app.css, apps-script/00_Config.js และ richmenu/build.py */
   THEME: {
-    primary: '#0F5132',
-    accent:  '#C8A24A',
-    ink:     '#1B2A24',
-    sub:     '#6B7C74',
-    bg:      '#F5F3EC',
+    primary: '#6B4A2B',
+    accent:  '#DBA66B',   // สีแทน — ใช้เป็นพื้นเท่านั้น
+    accentInk: '#9A6B2E', // ตัวอักษรสีแทนบนพื้นสว่าง
+    ink:     '#312215',
+    sub:     '#866B4E',
+    bg:      '#F9F1E8',
     danger:  '#B3261E',
     ok:      '#146C43'
   }

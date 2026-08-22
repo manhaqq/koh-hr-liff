@@ -20,7 +20,7 @@ function writeReport_(name, title, headers, rows, widths, footnote) {
   sh.setRowHeight(1, 28);
 
   sh.getRange(2, 1, 1, headers.length).setValues([headers])
-    .setBackground('#E8EFEA').setFontWeight('bold');
+    .setBackground('#EFE4D6').setFontWeight('bold');
   if (rows.length) sh.getRange(3, 1, rows.length, headers.length).setValues(rows);
 
   (widths || []).forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
@@ -30,7 +30,7 @@ function writeReport_(name, title, headers, rows, widths, footnote) {
     var r = 3 + rows.length + 1;
     sh.getRange(r, 1).setValue(footnote);
     sh.getRange(r, 1, 1, headers.length).merge()
-      .setFontSize(9).setFontColor('#6B7C74').setWrap(true);
+      .setFontSize(9).setFontColor('#866B4E').setWrap(true);
   }
   sh.activate();
   return sh;
@@ -120,7 +120,7 @@ function reportShiftCoverage() {
     o.vals.forEach(function (v, j) {
       var c = sh.getRange(3 + i, 2 + j);
       if (v === 0) c.setBackground('#FDECEA').setFontColor('#B3261E').setFontWeight('bold');
-      else if (o.avg > 0 && v < Math.max(1, Math.floor(o.avg * 0.7))) c.setBackground('#FDF6E3');
+      else if (o.avg > 0 && v < Math.max(1, Math.floor(o.avg * 0.7))) c.setBackground('#FDF6E9');
     });
   });
 }

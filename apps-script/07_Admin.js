@@ -114,8 +114,8 @@ function seedIfEmpty_() {
   var shShift = ss.getSheetByName('Shifts');
   if (shShift.getLastRow() < 2) {
     shShift.getRange(2, 1, 3, 9).setValues([
-      ['OFF','*','วันหยุดประจำสัปดาห์','','','','','#9AA5A0','TRUE'],
-      ['LV', '*','ลา (ตามใบลาที่อนุมัติ)','','','','','#C08A2E','TRUE'],
+      ['OFF','*','วันหยุดประจำสัปดาห์','','','','','#9E8B76','TRUE'],
+      ['LV', '*','ลา (ตามใบลาที่อนุมัติ)','','','','','#C89A52','TRUE'],
       ['TR', '*','อบรม/ประชุม','','','','','#3D6EB4','TRUE']
     ]);
   }

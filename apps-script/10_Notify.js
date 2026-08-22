@@ -206,18 +206,18 @@ function notifyHrEmail(subject, htmlBody) {
 
 function emailTemplate_(title, rows, footer) {
   var tr = rows.map(function (r) {
-    return '<tr><td style="padding:8px 12px;color:#6B7C74;font-size:13px;white-space:nowrap">' + r[0] +
-           '</td><td style="padding:8px 12px;font-size:14px;font-weight:600;color:#1B2A24">' + r[1] + '</td></tr>';
+    return '<tr><td style="padding:8px 12px;color:#866B4E;font-size:13px;white-space:nowrap">' + r[0] +
+           '</td><td style="padding:8px 12px;font-size:14px;font-weight:600;color:#312215">' + r[1] + '</td></tr>';
   }).join('');
   return '<div style="font-family:-apple-system,Segoe UI,sans-serif;max-width:560px;margin:0 auto">' +
-    '<div style="background:#0F5132;color:#fff;padding:20px 24px;border-radius:14px 14px 0 0">' +
+    '<div style="background:#6B4A2B;color:#fff;padding:20px 24px;border-radius:14px 14px 0 0">' +
       '<div style="font-size:12px;opacity:.7;letter-spacing:.08em">' + CFG.ORG + ' · HR HUB</div>' +
       '<div style="font-size:19px;font-weight:700;margin-top:4px">' + title + '</div></div>' +
-    '<div style="border:1px solid #E6E2D6;border-top:0;border-radius:0 0 14px 14px;padding:8px 12px;background:#fff">' +
+    '<div style="border:1px solid #EADFD0;border-top:0;border-radius:0 0 14px 14px;padding:8px 12px;background:#fff">' +
       '<table style="width:100%;border-collapse:collapse">' + tr + '</table>' +
-      (footer ? '<div style="padding:12px;font-size:13px;color:#6B7C74;line-height:1.7">' + footer + '</div>' : '') +
+      (footer ? '<div style="padding:12px;font-size:13px;color:#866B4E;line-height:1.7">' + footer + '</div>' : '') +
       '<div style="padding:12px"><a href="https://docs.google.com/spreadsheets/d/' + CFG.ssId + '/edit" ' +
-      'style="display:inline-block;background:#0F5132;color:#fff;text-decoration:none;padding:11px 20px;' +
+      'style="display:inline-block;background:#6B4A2B;color:#fff;text-decoration:none;padding:11px 20px;' +
       'border-radius:9px;font-size:14px;font-weight:600">เปิด Google Sheets</a></div>' +
     '</div></div>';
 }

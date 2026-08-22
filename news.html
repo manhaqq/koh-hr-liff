@@ -91,7 +91,7 @@ function renderDetail(a) {
       </div>
       <h2 style="font-size:19px;line-height:1.45;margin-bottom:12px">${esc(a.title)}</h2>
       ${a.imageUrl ? `<img src="${esc(a.imageUrl)}" alt="" style="border-radius:12px;margin-bottom:14px">` : ''}
-      <div style="font-size:14.5px;line-height:1.85;color:#33443B">${nl2br(a.body || a.summary || '')}</div>
+      <div style="font-size:14.5px;line-height:1.85;color:#4A3A2A">${nl2br(a.body || a.summary || '')}</div>
       ${a.fileUrl ? `<a class="btn ghost" style="margin-top:16px" href="${esc(a.fileUrl)}" target="_blank" rel="noopener">📎 เปิดไฟล์แนบ</a>` : ''}
       ${a.linkUrl ? `<a class="btn" style="margin-top:10px" href="${esc(a.linkUrl)}" target="_blank" rel="noopener">เปิดลิงก์ที่เกี่ยวข้อง</a>` : ''}
     </div>
