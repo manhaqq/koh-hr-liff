@@ -494,38 +494,14 @@ function handbookCategories() {
 /* ================= ตารางงาน ================= */
 
 function getScheduleFor(empCode, fromDate, toDate) {
-  var code = String(empCode).trim().toUpperCase();
-  /* ★ empCode ว่าง = ไม่ตรงกับใครเลย ห้ามปล่อยให้ '' ไปแมตช์กับแถวที่ empCode ว่างเหมือนกัน
-     (ในชีต Schedule มีแถวแบบนั้นจริง จากรูปแบบกะที่ยังจับคู่ชื่อไม่ได้) */
-  if (!code) return [];
-  var shiftMap = {};
-  readTable(SHEETS.SHIFTS).forEach(function (s) { shiftMap[String(s.shiftCode).trim()] = s; });
-  return readTable(SHEETS.SCHEDULE)
-    .filter(function (r) {
-      if (String(r.empCode).trim().toUpperCase() !== code) return false;
-      var d = String(r.date).trim();
-      if (fromDate && d < fromDate) return false;
-      if (toDate   && d > toDate)   return false;
-      return true;
-    })
-    .map(function (r) {
-      var s = shiftMap[String(r.shiftCode).trim()] || {};
-      return {
-        date:      String(r.date).trim(),
-        shiftCode: String(r.shiftCode).trim(),
-        shiftName: s.label || s.name || String(r.shiftCode).trim(),
-        dept:      r.dept || s.dept || '',
-        start:     r.startTime || s.start || '',
-        end:       r.endTime   || s.end   || '',
-        breaks:    r.breaks    || s.breaks || '',
-        ot:        r.ot        || s.ot     || '',
-        branch:    r.branch || '',
-        color:     s.color || CFG.BRAND.primary,
-        note:      r.note || '',
-        status:    r.status || ''
-      };
-    })
-    .sort(function (a, b) { return a.date.localeCompare(b.date); });
+  /* แกนจริงย้ายไปอยู่ที่ scheduleFor_ ใน 06_WebApi.gs ซึ่งรับตารางที่อ่านมาแล้ว
+     เข้าไปได้ หน้าตารางงานจึงอ่านแต่ละแท็บครั้งเดียวต่อคำขอ แทนที่จะอ่าน
+     Schedule 2 รอบและ Shifts 3 รอบเหมือนเดิม
+     ★ เก็บฟังก์ชันนี้ไว้เป็นทางเรียกแบบเดิมโดยตั้งใจ — buildIcs_ และรายงาน
+     R01/R02 เรียกอยู่ และไม่ควรต้องรู้เรื่องการส่งตารางเข้าไปเอง
+     ★ ห้าม copy ตรรกะกลับมาไว้ที่นี่อีก การมีตรรกะตารางกะสองชุดที่เหมือนกัน
+     คนละไฟล์คือระเบิดเวลา เพราะวันหนึ่งจะมีคนแก้แค่ชุดเดียว */
+  return scheduleFor_(empCode, fromDate, toDate);
 }
 
 /* ================= FAQ ================= */
@@ -558,7 +534,7 @@ function createTicket(data) {
     detail:     data.detail || '',
     attachment: data.attachment || '',
     priority:   data.priority || 'ปกติ',
-    status:     'ใหม่',
+    status:     TICKET_STATUS.NEW,
     assignee:   '',
     slaDue:     addDaysStr_(cat.sla),
     reply:      '',
@@ -598,7 +574,7 @@ function createLeave(data) {
     dateTo:    data.dateTo || '',
     days:      data.days || '',
     reason:    data.reason || '',
-    status:    'รออนุมัติ',
+    status:    LEAVE_STATUS.PENDING,
     approver:  '',
     decidedAt: '',
     remark:    ''

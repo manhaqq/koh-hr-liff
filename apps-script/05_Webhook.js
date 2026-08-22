@@ -146,6 +146,10 @@ function handleEvent_(ev) {
   /* --- ข้อความ --- */
   if (ev.type === 'message') {
     if (ev.message.type === 'text') { handleText_(ev, emp); return; }
+    /* ★ ต้องอยู่ "ก่อน" ข้อความปฏิเสธด้านล่าง และรับเฉพาะ hr/admin เท่านั้น
+       (ตัวฟังก์ชันเช็ก role เอง คืน false ถ้าไม่ใช่ ซึ่งจะตกไปโดนปฏิเสธตามเดิม)
+       คำเตือนเรื่องข้อมูลส่วนบุคคลด้านล่างจึงยังทำงานกับพนักงานทั่วไปครบเหมือนเดิม */
+    if (typeof handleImageMessage_ === 'function' && handleImageMessage_(ev, emp)) return;
     reply(replyToken, withQuickReply({ type: 'text',
       text: 'ตอนนี้ระบบรับเฉพาะข้อความตัวอักษรค่ะ 🙏\n\n⚠️ เพื่อความปลอดภัยของข้อมูลส่วนบุคคล กรุณาอย่าส่งรูปบัตรประชาชนหรือใบรับรองแพทย์ผ่านแชทนี้ ให้ยื่นเอกสารตัวจริงที่ร้านแทน' }));
     return;
@@ -163,8 +167,8 @@ function handleText_(ev, emp) {
   var shortcuts = {
     '#myid':     function () { reply(rt, { type: 'text', text: 'LINE User ID ของคุณคือ\n' + ev.source.userId }); },
     'เมนู':      function () { reply(rt, withQuickReply(flexTopFaq())); },
-    'ติดต่อhr':  function () { reply(rt, flexHrMenu()); },
-    'ติดต่อ hr': function () { reply(rt, flexHrMenu()); },
+    'ติดต่อhr':  function () { reply(rt, flexHrMenu(emp)); },
+    'ติดต่อ hr': function () { reply(rt, flexHrMenu(emp)); },
     'กะวันนี้':  function () { replyTodayShift_(rt, emp); },
     'ตารางงาน':  function () { replyTodayShift_(rt, emp); },
     'ประกาศ':    function () { replyLatestNews_(rt, emp); },
@@ -225,7 +229,7 @@ function handlePostback_(ev, emp) {
      เดิมล้างที่นี่ = จุดแดงหายตั้งแต่ยังไม่เห็นอะไร และไม่มีสัญญาณที่สองอีกเลย
      ทั้งที่จุดแดงคือช่องทางเดียวที่บอกว่า HR ตอบแล้ว (โหมด 0 บาท ไม่มี push)
      จุดล้างที่ถูกต้องคือ API 'my_tickets' ใน 06_WebApi.js ซึ่งคืนคอลัมน์ reply จริง */
-  if (a === 'hr_menu')     { reply(rt, flexHrMenu()); return; }
+  if (a === 'hr_menu')     { reply(rt, flexHrMenu(emp)); return; }
   if (a === 'appguide')    { reply(rt, flexAppGuideMenu()); return; }
   if (a === 'org')         { reply(rt, flexOrgLink(emp)); return; }
   if (a === 'reports')     { reply(rt, flexReportsLink(emp)); return; }
@@ -263,6 +267,9 @@ function handlePostback_(ev, emp) {
     });
     return;
   }
+
+  /* postback ของการแนบรูปในประกาศ — ดักก่อนข้อความ "ไม่พบคำสั่งนี้" */
+  if (typeof handleMediaPostback_ === 'function' && handleMediaPostback_(p, ev, emp)) return;
 
   reply(rt, withQuickReply({ type: 'text', text: 'ไม่พบคำสั่งนี้ค่ะ ลองเลือกจากเมนูด้านล่างนะคะ' }));
 }

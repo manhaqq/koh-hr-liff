@@ -23,6 +23,21 @@ function handleApi_(d) {
     return { ok: false, code: String(emp.status).toUpperCase(), message: 'บัญชีนี้ถูกปิดการใช้งานแล้ว' };
   }
 
+  /* ---- ฟีเจอร์เสริมที่แยกไฟล์ไว้ ----
+     ต้องดักตรงนี้ "หลัง" ตรวจตัวตนและสถานะพนักงานแล้ว และ "ก่อน" switch เสมอ
+     ถ้าเผลอย้ายไปไว้ใน doPost คำสั่งที่ต้องใช้สิทธิ์จะเรียกได้โดยไม่ผ่าน ID token
+     ทั้งสองตัวคืน null เมื่อไม่ใช่คำสั่งของตัวเอง คำสั่งเดิมจึงไหลลง switch ตามปกติ
+     ★ forms ต้องมาก่อน switch เพราะต้องแย่ง report_data ของ R11/R12
+       ไปจัดการเอง ส่วน reportId อื่นจะคืน null แล้วตกไปที่ apiReportData_ เดิม */
+  if (typeof handleAdminApi_ === 'function') {
+    var adm = handleAdminApi_(api, d, emp, userId);
+    if (adm) return adm;
+  }
+  if (typeof handleFormsApi_ === 'function') {
+    var frm = handleFormsApi_(api, d, emp, userId);
+    if (frm) return frm;
+  }
+
   switch (api) {
     case 'me':            return { ok: true, me: publicEmp_(emp), badges: getBadges_(userId) };
     case 'news':          clearBadge(userId, 'news'); return apiNews_(emp, d);
@@ -238,9 +253,22 @@ function verifyLocked_(first, last, last4, userId, lineName) {
  * ================================================================ */
 function apiNews_(emp, d) {
   var list = getAnnouncements(emp, 200).map(function (a) {
+    /* ★ ส่งรูป 3 ขนาดจากไฟล์เดียว โดยใช้พารามิเตอร์ความกว้างของ Google
+       ถ้าส่งแต่ imageUrl ขนาดเดียว รูปย่อขนาด 72x72 ในรายการจะต้องโหลดไฟล์
+       ความกว้าง 1024 (~275 KB) ทุกใบ ประกาศที่มีรูป 20 ใบ = โหลด ~5.5 MB
+       เพื่อวาดสี่เหลี่ยมเล็ก ๆ ซึ่งหนักกว่าตอนยังไม่มีรูปเสียอีก */
+    var thumb = '', large = '';
+    if (typeof announcementImageUrl_ === 'function') {
+      thumb = announcementImageUrl_(a.imageFileId, MEDIA_W_THUMB);
+      large = announcementImageUrl_(a.imageFileId, MEDIA_W_FULL);
+    }
     return {
       id: a.id, date: a.date, category: a.category, title: a.title,
-      summary: a.summary, body: a.body, imageUrl: a.imageUrl,
+      summary: a.summary, body: a.body,
+      imageUrl: a.imageUrl,
+      thumbUrl: thumb || a.imageUrl || '',
+      imageUrlLarge: large || a.imageUrl || '',
+      hasImage: !!(a.imageFileId || a.imageUrl),
       linkUrl: a.linkUrl, fileUrl: a.fileUrl,
       pinned: String(a.pinned).toUpperCase() === 'TRUE'
     };

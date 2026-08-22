@@ -257,7 +257,21 @@ function flexTodayShift(emp, shifts) {
 /* ================================================================
  * 5) เมนูติดต่อ HR
  * ================================================================ */
-function flexHrMenu() {
+/**
+ * การ์ด "ติดต่อ HR"
+ * @param {object} [emp] พนักงานที่กดเข้ามา — ถ้าเป็นหัวหน้า/HR/แอดมิน
+ *        จะมีปุ่มเข้าแผงควบคุมเพิ่มขึ้นมาที่ท้ายการ์ด
+ *        ★ ไม่มีช่องว่างใน Rich Menu ให้เพิ่มปุ่มที่ 5 แล้ว การ์ดนี้จึงเป็นทางเข้าหลัก
+ *        ถ้าไม่ส่ง emp มา ปุ่มจะไม่ขึ้น (ปลอดภัยโดยค่าเริ่มต้น)
+ */
+/** คืน [ปุ่ม] ถ้าคนนี้มีสิทธิ์เข้าแผงควบคุม ไม่งั้นคืน [] เพื่อให้ .concat() ไม่เพิ่มอะไร
+    ห่อไว้เพราะ 12_AdminApi.gs อาจยังไม่ถูกติดตั้ง การ์ดนี้ต้องไม่พังตามไปด้วย */
+function adminEntry_(emp) {
+  if (!emp || typeof adminEntryButton_ !== 'function') return [];
+  try { var b = adminEntryButton_(emp); return b ? [b] : []; } catch (e) { return []; }
+}
+
+function flexHrMenu(emp) {
   return fx_('ติดต่อ HR', {
     type: 'bubble',
     header: fxHeader_('💬 ติดต่อ HR', 'เลือกเรื่องที่ต้องการ — เราตอบทุกเรื่องภายใน 1–3 วันทำการ'),
@@ -294,7 +308,7 @@ function flexHrMenu() {
         { type: 'button', style: 'link', height: 'sm', action: fxPost_('📬 ติดตามเรื่องที่ส่งไปแล้ว', 'action=my_tickets', 'ติดตามเรื่องของฉัน') },
         { type: 'text', size: 'xxs', color: C.sub, align: 'center', wrap: true,
           text: 'เรื่องด่วนที่เป็นอันตราย โทรหัวหน้าโดยตรง หรือสายด่วนกระทรวงแรงงาน 1506' }
-      ]
+      ].concat(adminEntry_(emp))
     }
   });
 }
@@ -441,8 +455,11 @@ function flexMyTickets(list) {
     return { type: 'text', text: 'คุณยังไม่เคยส่งเรื่องถึง HR ค่ะ 📭\nกดเมนู “ติดต่อ HR” เพื่อเริ่มส่งเรื่องได้เลย' };
   }
   var rows = list.slice(0, 8).map(function (t) {
-    var color = String(t.status).indexOf('เสร็จ') >= 0 ? C.ok
-              : String(t.status).indexOf('ใหม่') >= 0 ? C.accent : C.primary;
+    /* ใช้คำศัพท์สถานะชุดกลาง ไม่ดมข้อความดิบ — 'ยังไม่ตอบ' มีคำว่า 'ตอบ' อยู่ในตัวเอง
+       การเทียบด้วย indexOf จึงพลาดได้เงียบ ๆ เมื่อมีคำใหม่เพิ่มเข้ามาภายหลัง */
+    var st    = (typeof normalizeTicketStatus === 'function') ? normalizeTicketStatus(t.status) : String(t.status || '');
+    var color = st === TICKET_STATUS.CLOSED ? C.ok
+              : st === TICKET_STATUS.NEW    ? C.accent : C.primary;
     return { type: 'box', layout: 'vertical', margin: 'md', spacing: 'xs', contents: [
       { type: 'box', layout: 'baseline', contents: [
         { type: 'text', text: t.ticketId, size: 'xxs', color: C.sub, flex: 0 },

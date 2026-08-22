@@ -164,6 +164,13 @@ function weeklyHealthCheck() {
   var body = problems.length
     ? '<b style="color:#B3261E">ต้องแก้ไข</b><br>' + problems.map(function (p) { return '• ' + p; }).join('<br>')
     : '<b style="color:#146C43">ระบบปกติดี ไม่พบปัญหา</b>';
+
+  /* แนบสรุปข้อสอบมาด้วย เพราะไม่มีใครเปิดเมนู "ตรวจความครอบคลุม" เองสัปดาห์ละครั้ง
+     รายงานที่ต้องกดเปิดเองคือรายงานที่ไม่มีใครอ่าน */
+  if (typeof formsCoverageDigest === 'function') {
+    try { body += '<br><br><b>แบบทดสอบ</b><br>' + formsCoverageDigest().split('\n').join('<br>'); }
+    catch (e) { /* ระบบข้อสอบยังไม่ได้ติดตั้ง — ไม่ใช่ปัญหา */ }
+  }
   if (miss.length) {
     body += '<br><br><b>คำถามที่ควรเพิ่มลง FAQ</b><br>' +
       miss.slice(0, 12).map(function (m) { return '• ' + m.detail; }).join('<br>');

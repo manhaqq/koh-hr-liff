@@ -26,6 +26,35 @@
   .cov .n{flex:0 0 46px;text-align:right;font-weight:700}
   .cov .dd{flex:1;font-size:11px;color:var(--sub);text-align:right}
   .cov.low .n{color:var(--danger)}
+
+  /* ---------- แบบทดสอบ (R11/R12) ----------
+     ใช้ .radio/.radio.on ของ app.css เป็นหลัก เพิ่มเฉพาะสถานะหลังตรวจคำตอบ */
+  .qprog{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .qprog .n{flex:0 0 auto;font-size:11.5px;font-weight:700;color:var(--sub)}
+  .qprog .bar{flex:1;height:8px;border-radius:5px;background:#EFE4D6;overflow:hidden}
+  .qprog .bar > i{display:block;height:100%;background:var(--accent);transition:width .28s}
+  .qtext{font-size:16px;font-weight:600;line-height:1.6;margin:0 0 14px}
+  .radio.locked{pointer-events:none}
+  .radio.right{border-color:var(--ok);background:#EEF6EF}
+  .radio.wrong{border-color:var(--danger);background:#FDF0EE}
+  .radio.dim{opacity:.55}
+  .verdict{border-radius:12px;padding:13px 15px;font-size:13px;line-height:1.7;margin:14px 0 0}
+  .verdict.good{background:#E9F3EA;color:var(--ok);border:1px solid #C3DFC8}
+  .verdict.bad{background:#FDECEA;color:#8C1D18;border:1px solid #F5C6C2}
+  .verdict .h{font-weight:700;font-size:14px;margin-bottom:3px}
+  .verdict a{color:inherit;text-decoration:underline;font-weight:600}
+  .qscore{text-align:center;padding:6px 0 12px}
+  .qscore .pc{font-size:42px;font-weight:800;line-height:1.1;color:var(--primary)}
+  .qscore .lb{font-size:12.5px;color:var(--sub);margin-top:2px}
+  .qz{background:#fff;border:1px solid var(--line);border-radius:var(--r);
+      padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow-sm)}
+  .qz .t{font-size:15px;font-weight:600;line-height:1.45}
+  .qz .d{font-size:12.5px;color:var(--sub);line-height:1.6;margin-top:5px}
+  .team{display:flex;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .team:last-child{border-bottom:0}
+  .team .nm{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .team .pc{flex:0 0 52px;text-align:right;font-weight:700}
+  .team.none .nm,.team.none .pc{color:var(--sub);font-weight:500}
 </style>
 </head>
 <body>
@@ -120,6 +149,8 @@ async function open(id) {
     r.kind === 'my_leave'     ? viewLeave(r.data)    :
     r.kind === 'dept_week'    ? viewDeptWeek(r.data) :
     r.kind === 'coverage'     ? viewCoverage(r.data) :
+    r.kind === 'quiz_me'      ? viewMyQuiz(r.data)   :
+    r.kind === 'quiz_team'    ? viewTeamQuiz(r.data) :
     '<div class="alert">ยังไม่รองรับรายงานรูปแบบนี้</div>';
 
   $('#content').innerHTML = `
@@ -127,6 +158,9 @@ async function open(id) {
     <div class="card"><h2 style="margin-bottom:2px">${esc(meta.title)}</h2>
       <p class="tiny" style="margin:0 0 12px">${esc(meta.description)}</p>
       ${body}</div>`;
+
+  /* ปุ่ม “เริ่มทำ” ของแบบทดสอบต้องผูกหลังวาดเสร็จ เพราะ body ถูกสร้างเป็นข้อความ */
+  $$('[data-quiz]').forEach(b => b.onclick = () => startQuiz(b.dataset.quiz));
 }
 
 function back() { render(); window.scrollTo(0, 0); }
@@ -180,7 +214,9 @@ function viewTickets(rows) {
 function viewLeave(rows) {
   if (!rows.length) return '<div class="alert">ยังไม่มีใบลาที่ยื่นผ่านไลน์<br>' +
     '<span class="tiny">ใบลาที่ยื่นในแอป myHR Cloud หรือกระดาษจะไม่แสดงที่นี่</span></div>';
-  const days = rows.filter(l => l.status === 'approved').reduce((a, b) => a + (+b.days || 0), 0);
+  /* ใช้ธง approved จากเซิร์ฟเวอร์ ไม่เทียบข้อความเอง — ชีตเก็บสถานะเป็นภาษาไทย
+     การเทียบกับ 'approved' ทำให้ยอดวันลาที่อนุมัติแล้วเป็น 0 ตลอดมา */
+  const days = rows.filter(l => l.approved).reduce((a, b) => a + (+b.days || 0), 0);
   return `<div class="kv"><span class="k">วันลาที่อนุมัติแล้วรวม</span><span class="v">${days} วัน</span></div>` +
     rows.map(l => `<div class="item">
       <div class="meta"><span class="tag">${esc(l.type)}</span><span>${esc(l.leaveId)}</span></div>
@@ -224,6 +260,267 @@ function viewCoverage(d) {
     </div>`).join('') +
     `<p class="tiny" style="margin:12px 0 0">⚠️ = น้อยกว่า 70% ของค่าเฉลี่ย ควรตรวจว่ามีคนลาซ้อนกันหรือไม่<br>
      คนที่ยังไม่ถูกจับคู่กับทะเบียนพนักงานจะไม่ถูกนับ — แจ้ง HR ให้เติมข้อมูลในชีต ShiftPattern</p>`;
+}
+
+/* =================================================================
+ *  R12 ผลแบบทดสอบของฉัน — และเป็นทางเข้าเดียวของแบบทดสอบ
+ *  ★ ไม่สร้างหน้าที่ 9 โดยตั้งใจ ใช้ seam เดิมของหน้านี้: open() สลับ #content
+ * ================================================================= */
+function viewMyQuiz(d) {
+  if (d.notReady) return '<div class="alert info">ระบบแบบทดสอบยังไม่ได้เปิดใช้งาน — แจ้ง HR ได้เลย</div>';
+
+  const avail = d.available || [], hist = d.history || [];
+  let html = '';
+
+  if (!avail.length) {
+    html += '<div class="alert">ตอนนี้ยังไม่มีแบบทดสอบที่เปิดให้คุณทำ</div>';
+  } else {
+    html += avail.map(f => {
+      const badge = f.passed ? '<span class="tag green">ผ่านแล้ว</span>'
+                  : f.resumeId ? '<span class="tag gold">ทำค้างไว้</span>'
+                  : f.attempts ? `<span class="tag">เคยทำ ${f.attempts} ครั้ง</span>` : '';
+      const line = [`${f.questionCount} ข้อ`];
+      if (f.passMark) line.push(`ผ่านที่ ${f.passMark}%`);
+      if (f.dueDate)  line.push(`ถึง ${thDate(f.dueDate)}`);
+      if (f.attempts) line.push(`คะแนนดีที่สุด ${f.bestPercent}%`);
+      return `<div class="qz">
+        <div class="hd" style="display:flex;gap:8px;align-items:baseline">
+          <div class="t" style="flex:1">${esc(f.title)}</div>${badge}
+        </div>
+        <div class="d">${esc(f.description)}</div>
+        <div class="d">${esc(line.join(' · '))}</div>
+        ${f.blocked
+          ? `<p class="tiny" style="margin:10px 0 0">${esc(f.blocked)}</p>`
+          : `<button class="btn sm" data-quiz="${esc(f.formId)}" style="margin-top:11px">
+               ${f.resumeId ? 'ทำต่อจากข้อที่ค้างไว้' : 'เริ่มทำแบบทดสอบ'}</button>`}
+      </div>`;
+    }).join('');
+  }
+
+  if (hist.length) {
+    html += '<div class="eyebrow" style="margin:18px 0 8px">คะแนนย้อนหลัง</div>';
+    html += hist.map(h => `<div class="kv">
+        <span class="k">${esc(h.formTitle)}<br><span class="tiny">ครั้งที่ ${h.attemptNo} · ${thDate(h.submittedAt)}</span></span>
+        <span class="v" style="color:${h.passed ? 'var(--ok)' : 'var(--danger)'}">${h.percent}%<br>
+          <span class="tiny" style="color:inherit">${h.score}/${h.total} ${h.passed ? 'ผ่าน' : 'ยังไม่ผ่าน'}</span></span>
+      </div>`).join('');
+  } else {
+    html += '<p class="tiny" style="margin:14px 0 0">ยังไม่มีคะแนนย้อนหลัง</p>';
+  }
+
+  html += `<p class="tiny" style="margin:14px 0 0">
+    คะแนนของคุณเห็นได้เฉพาะตัวคุณเอง หัวหน้าแผนกของคุณ และฝ่ายบุคคลเท่านั้น
+    เพื่อนร่วมงานเปิดดูไม่ได้</p>`;
+  return html;
+}
+
+/* =================================================================
+ *  R11 ความคืบหน้าของทีม (หัวหน้าแผนกขึ้นไป)
+ * ================================================================= */
+function viewTeamQuiz(d) {
+  if (d.notReady) return '<div class="alert info">ระบบแบบทดสอบยังไม่ได้เปิดใช้งาน</div>';
+  if (d.warning)  return `<div class="alert err">${esc(d.warning)}</div>`;
+  if (!d.rows.length) return '<div class="alert">ยังไม่มีพนักงานในขอบเขตที่คุณดูได้</div>';
+
+  const pct = d.headcount ? Math.round(d.doneCount * 100 / d.headcount) : 0;
+  let html = `<p class="tiny" style="margin:0 0 10px">แผนก${esc(d.dept)} · แบบทดสอบที่เปิดอยู่ ${d.forms.length} ชุด</p>
+    <div class="stat">
+      <div class="b"><div class="n">${d.headcount}</div><div class="l">คนในทีม</div></div>
+      <div class="b"><div class="n">${d.doneCount}</div><div class="l">ทำแล้ว</div></div>
+      <div class="b"><div class="n" style="color:${d.passCount ? 'var(--ok)' : 'var(--sub)'}">${d.passCount}</div><div class="l">ผ่านแล้ว</div></div>
+    </div>
+    <div class="bar"><i style="width:${pct}%"></i></div>
+    <p class="tiny" style="margin:6px 0 0">ทำไปแล้ว ${pct}% ของทีม</p>
+    <div class="divider"></div>`;
+
+  html += d.rows.map(r => `<div class="team ${r.attempts ? '' : 'none'}">
+      <div class="nm">${esc(r.name)}</div>
+      <div class="dd tiny" style="flex:0 0 96px;text-align:right">${r.attempts ? (r.lastAt ? thDate(r.lastAt) : '—') : 'ยังไม่ได้ทำ'}</div>
+      <div class="pc" style="color:${r.attempts ? (r.passed ? 'var(--ok)' : 'var(--danger)') : 'var(--sub)'}">
+        ${r.attempts ? r.bestPercent + '%' : '—'}</div>
+    </div>`).join('');
+
+  if (d.weak && d.weak.length) {
+    html += '<div class="eyebrow" style="margin:20px 0 8px">หัวข้อที่ทีมพลาดบ่อยที่สุด</div>';
+    html += d.weak.map(w => `<div class="cov">
+        <div class="dd" style="flex:1;text-align:left">${esc(w.question)}<br>
+          <span class="tiny">${esc(w.poolLabel)}</span></div>
+        <div class="n">${w.misses}</div>
+      </div>`).join('');
+    html += '<p class="tiny" style="margin:10px 0 0">ตัวเลขคือจำนวนครั้งที่ทีมตอบข้อนั้นผิด ไม่ได้บอกว่าใครตอบอะไร</p>';
+  }
+
+  html += `<p class="tiny" style="margin:14px 0 0">
+    คุณเห็นเฉพาะทีมของตัวเอง และทุกครั้งที่เปิดรายงานนี้ระบบจะบันทึกไว้ตรวจสอบย้อนหลังได้</p>`;
+  return html;
+}
+
+/* =================================================================
+ *  ตัวเดินแบบทดสอบ — หนึ่งคำถามต่อหนึ่งจอ
+ * -----------------------------------------------------------------
+ *  ★ ไม่มีปุ่มย้อนกลับโดยตั้งใจ และไม่ใช่แค่ไม่วาด — เซิร์ฟเวอร์ปฏิเสธ
+ *    ข้อที่ตอบไปแล้วอยู่แล้ว ปุ่มย้อนกลับจึงเป็นได้แค่ปุ่มที่กดแล้ว error
+ *  ★ ไม่มีการเก็บคำถามทั้งชุดไว้ที่นี่ ตัวแปร QZ ถือแค่ข้อปัจจุบัน
+ *    ปิดหน้าไปกลางคันแล้วเปิดใหม่ ระบบจะพากลับมาที่ข้อเดิมเอง
+ * ================================================================= */
+let QZ = null;
+
+async function startQuiz(formId) {
+  /* ★ ซ่อนแถบหมวดระหว่างทำ — ไม่งั้นแตะโดนชิปหมวดหนึ่งครั้งจะเด้งออกจากข้อสอบกลางคัน
+     back() เรียก render() ซึ่งวาดแถบนี้กลับมาเองอยู่แล้ว */
+  $('#topArea').innerHTML = '';
+  showLoading('#content', 'กำลังเตรียมแบบทดสอบ...');
+  const r = await api('quiz_start', { formId });
+  if (!r.ok) {
+    $('#content').innerHTML =
+      `<button class="btn ghost sm" onclick="back()" style="margin-bottom:12px">← กลับไปรายการรายงาน</button>
+       <div class="alert err">${esc(r.message || 'เริ่มแบบทดสอบไม่สำเร็จ')}</div>`;
+    return;
+  }
+  QZ = { attemptId: r.attemptId, title: r.title, passMark: r.passMark || 0 };
+  if (r.finished) return renderQuizSummary(r.summary);
+  if (r.resumed) toast('ทำต่อจากข้อที่ค้างไว้');
+  renderQuestion(r.question);
+}
+
+function renderQuestion(q) {
+  QZ.q = q;
+  const multi = q.type === 'multi';
+  const pct = Math.round((q.index - 1) * 100 / q.total);
+
+  $('#content').innerHTML = `
+    <div class="card">
+      <div class="qprog">
+        <div class="n">ข้อ ${q.index} / ${q.total}</div>
+        <div class="bar"><i style="width:${pct}%"></i></div>
+      </div>
+      ${q.poolLabel ? `<div class="eyebrow">${esc(q.poolLabel)}</div>` : ''}
+      <p class="qtext">${esc(q.question)}</p>
+      <div class="radio-group" id="chs">
+        ${q.choices.map(c => `
+          <label class="radio" data-k="${esc(c.key)}">
+            <input type="${multi ? 'checkbox' : 'radio'}" name="ch" value="${esc(c.key)}">
+            <div><div class="t">${esc(c.text)}</div></div>
+          </label>`).join('')}
+      </div>
+      <div id="verdict"></div>
+      <button class="btn" id="go" disabled style="margin-top:16px">ตรวจคำตอบ</button>
+      <p class="tiny center" style="margin:10px 0 0">
+        ${multi ? 'เลือกได้มากกว่า 1 ข้อ · ' : ''}ตอบแล้วย้อนกลับมาแก้ไม่ได้</p>
+    </div>`;
+
+  $$('#chs .radio').forEach(el => el.onclick = () => {
+    setTimeout(() => {
+      $$('#chs .radio').forEach(x => x.classList.toggle('on', !!x.querySelector('input').checked));
+      $('#go').disabled = !picked().length;
+    }, 0);
+  });
+  $('#go').onclick = submitAnswer;
+  window.scrollTo(0, 0);
+}
+
+function picked() {
+  return $$('#chs input').filter(i => i.checked).map(i => i.value);
+}
+
+async function submitAnswer() {
+  const choice = picked().join(',');
+  if (!choice) return;
+  const btn = $('#go');
+  btn.disabled = true;
+  btn.textContent = 'กำลังตรวจ...';
+
+  const r = await api('quiz_answer', { attemptId: QZ.attemptId, qId: QZ.q.qId, choice });
+
+  /* เซิร์ฟเวอร์เป็นคนตัดสินว่าข้อไหนตอบไปแล้ว หน้าเว็บแค่เดินตามข้อที่มันส่งกลับมา */
+  if (r.code === 'ALREADY_ANSWERED') {
+    toast(r.message || 'ข้อนี้ตอบไปแล้ว');
+    if (r.next) return renderQuestion(r.next);
+    return back();
+  }
+  if (!r.ok) {
+    btn.disabled = false;
+    btn.textContent = 'ตรวจคำตอบ';
+    toast(r.message || 'ส่งคำตอบไม่สำเร็จ กรุณาลองอีกครั้ง');
+    return;
+  }
+
+  showVerdict(r);
+}
+
+function showVerdict(r) {
+  const good = r.correct === true;
+
+  /* แบบสำรวจไม่มีถูก-ผิด จึงล็อกเฉย ๆ ห้ามระบายสีคำตอบของคนตอบเป็นสีแดง */
+  $$('#chs .radio').forEach(el => {
+    el.classList.add('locked');
+    if (r.graded === false) return;
+    const mine = el.querySelector('input').checked;
+    const isKey = r.correctChoice && r.correctChoice.split(',').includes(el.dataset.k);
+    if (isKey) el.classList.add('right');
+    else if (mine) el.classList.add('wrong');
+    else el.classList.add('dim');
+  });
+
+  if (r.graded === false) {
+    $('#verdict').innerHTML = '<div class="verdict good"><div class="h">บันทึกคำตอบแล้ว</div></div>';
+  } else {
+    $('#verdict').innerHTML = `
+      <div class="verdict ${good ? 'good' : 'bad'}">
+        <div class="h">${good ? '✅ ถูกต้อง' : '❌ ยังไม่ถูก'}</div>
+        ${!good && r.correctText ? `คำตอบที่ถูกคือ <strong>${esc(r.correctChoice)}. ${esc(r.correctText)}</strong><br>` : ''}
+        ${r.explain ? esc(r.explain) : ''}
+        ${r.source ? `<br><a href="${esc(r.source.url)}">${esc(r.source.label)} →</a>` : ''}
+      </div>`;
+  }
+
+  const btn = $('#go');
+  btn.disabled = false;
+  if (r.next) {
+    btn.textContent = `ข้อถัดไป (${r.next.index}/${r.next.total})`;
+    btn.onclick = () => renderQuestion(r.next);   // ข้อถัดไปมากับคำตอบนี้แล้ว ไม่ต้องเรียกเซิร์ฟเวอร์ซ้ำ
+  } else {
+    btn.textContent = 'ดูผลคะแนน';
+    btn.onclick = () => renderQuizSummary(r.summary);
+  }
+}
+
+function renderQuizSummary(s) {
+  if (!s) return back();
+  const good = s.survey || s.passed;
+  const head = s.survey
+    ? '<div class="qscore"><div class="pc">✅</div><div class="lb">ส่งคำตอบเรียบร้อยแล้ว</div></div>'
+    : `<div class="qscore">
+         <div class="pc" style="color:${good ? 'var(--ok)' : 'var(--danger)'}">${s.percent}%</div>
+         <div class="lb">ตอบถูก ${s.score} จาก ${s.total} ข้อ${s.passMark ? ` · เกณฑ์ผ่าน ${s.passMark}%` : ''}</div>
+       </div>
+       <div class="verdict ${good ? 'good' : 'bad'}">
+         <div class="h">${good ? 'ผ่านเกณฑ์แล้ว' : 'ยังไม่ผ่านเกณฑ์'}</div>
+         ${good ? 'ขอบคุณที่สละเวลาทบทวนนะครับ' : 'ลองอ่านหัวข้อที่พลาดด้านล่างแล้วทำใหม่อีกครั้งได้'}
+       </div>`;
+
+  const review = (s.review || []).map(w => `
+    <div class="item" style="cursor:default">
+      <div class="meta"><span class="tag red">ข้อ ${w.index}</span></div>
+      <div class="title">${esc(w.question)}</div>
+      <div class="excerpt" style="-webkit-line-clamp:none">
+        คุณตอบ ${esc(w.yourChoice || '-')}${w.yourText ? '. ' + esc(w.yourText) : ''}<br>
+        <span style="color:var(--ok)">คำตอบที่ถูก ${esc(w.correctChoice)}. ${esc(w.correctText)}</span><br>
+        ${esc(w.explain)}
+        ${w.source ? `<br><a href="${esc(w.source.url)}">${esc(w.source.label)} →</a>` : ''}
+      </div>
+    </div>`).join('');
+
+  $('#content').innerHTML = `
+    <div class="card">
+      <h2 style="margin-bottom:2px">${esc(QZ && QZ.title ? QZ.title : 'ผลแบบทดสอบ')}</h2>
+      <p class="tiny" style="margin:0 0 12px">ใช้เวลา ${Math.max(1, Math.round((s.durationSec || 0) / 60))} นาที</p>
+      ${head}
+    </div>
+    ${review ? `<div class="eyebrow" style="margin:4px 4px 8px">ข้อที่ตอบผิด (${s.review.length})</div>${review}` : ''}
+    <button class="btn ghost" onclick="back()" style="margin-top:6px">กลับไปรายการรายงาน</button>`;
+  QZ = null;
+  window.scrollTo(0, 0);
 }
 </script>
 </body>

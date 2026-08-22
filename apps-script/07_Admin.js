@@ -16,7 +16,10 @@ function onOpen() {
       .addItem('🟢 เผยแพร่ประกาศที่เลือก (ฟรี — ติดจุดแดงบนเมนู)', 'publishSelectedAnnouncement')
       .addItem('🟢 เผยแพร่ประกาศที่ค้างทั้งหมด (ฟรี)', 'publishPendingAnnouncements')
       .addSeparator()
-      .addItem('🔴 ส่งด่วนเข้าแชททุกคน (ใช้โควตา!)', 'emergencyBroadcast'))
+      .addItem('🔴 ส่งด่วนเข้าแชททุกคน (ใช้โควตา!)', 'emergencyBroadcast')
+      .addSeparator()
+      .addItem('🗑️ ถอนรูปออกจากประกาศ (แถวปัจจุบัน)', 'removeSelectedAnnouncementImage')
+      .addItem('🔁 ออก URL รูปใหม่ทั้งหมด', 'regenerateAllAnnouncementImageUrls'))
     .addSubMenu(SpreadsheetApp.getUi().createMenu('👥 พนักงาน')
       .addItem('เปิดสิทธิ์ผู้ที่ active ทั้งหมด (ซิงก์เมนู)', 'syncAllRichMenus')
       .addItem('🚪 ตัดสิทธิ์พนักงานลาออก (แถวปัจจุบัน)', 'offboardSelectedEmployee')
@@ -42,6 +45,10 @@ function onOpen() {
       .addSeparator()
       .addItem('⚠️ รายชื่อที่ต้องยืนยัน (ตารางกะ ↔ ทะเบียน)', 'reportRosterGaps')
       .addItem('🩺 สุขภาพระบบ', 'reportSystemHealth'))
+    .addSubMenu(SpreadsheetApp.getUi().createMenu('📝 แบบทดสอบ')
+      .addItem('① ติดตั้งระบบแบบทดสอบ (สร้างแท็บ)', 'ensureFormsSheets')
+      .addItem('② ใส่ชุดข้อสอบตั้งต้น (เฉพาะตอนยังว่าง)', 'seedFormsIfEmpty_')
+      .addItem('ตรวจความครอบคลุมของข้อสอบ', 'showFormsCoverage'))
     .addSubMenu(SpreadsheetApp.getUi().createMenu('🎛️ Rich Menu')
       .addItem('สร้าง/อัปเดต Rich Menu ทั้งหมด', 'setupRichMenus')
       .addItem('ดูรายการ Rich Menu ปัจจุบัน', 'showRichMenus')
@@ -170,6 +177,12 @@ function protectSensitive_() {
 function publishSelectedAnnouncement() {
   var a = pickAnnouncementRow_();
   if (!a) return;
+  /* ตรวจว่าลิงก์รูปยังเปิดได้จริงก่อนส่งถึงพนักงาน 60 คน
+     ถ้าไฟล์ถูกลบหรือสิทธิ์ถูกเปลี่ยน การ์ด Flex จะขึ้นรูปแตกและแก้ย้อนหลังไม่ได้ */
+  if (typeof announcementImageProblem_ === 'function') {
+    var imgWarn = announcementImageProblem_(a);
+    if (imgWarn && !confirm_('รูปในประกาศมีปัญหา', imgWarn + '\n\nเผยแพร่ต่อโดยไม่มีรูปหรือไม่?')) return;
+  }
   var n = notifyAnnouncement_(a, true);
   alert_('เผยแพร่แล้ว ✅',
     '📢 ' + a.title + '\n\n' +

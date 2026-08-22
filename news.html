@@ -5,6 +5,59 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>ประกาศและข่าวสาร | โก๋ในซอย HR Hub</title>
 <link rel="stylesheet" href="app.css">
+<style>
+/* รูปแนบในประกาศ — ใช้เฉพาะหน้านี้ จึงไม่ไปเพิ่มน้ำหนักให้ app.css ทุกหน้า
+   ★ ทุกกล่องรูปต้องมีความสูงตั้งแต่ก่อนรูปมาถึง
+     ถ้าไม่จองที่ไว้ เนื้อหาจะกระโดดตอนรูปโหลดเสร็จ ซึ่งบนเน็ตร้านที่ช้า
+     แปลว่าพนักงานกำลังอ่านอยู่แล้วบรรทัดเลื่อนหนีมือ */
+
+/* --- รูปใหญ่ในหน้ารายละเอียด --- */
+.ann-fig{
+  position:relative; margin:0 0 14px; border-radius:12px; overflow:hidden;
+  aspect-ratio:20/13;                 /* สัดส่วนเดียวกับ hero ของการ์ดในแชท */
+  background:var(--line);             /* สีพื้นตอนยังไม่มีรูป = โครงร่าง */
+}
+.ann-fig img{
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:cover; opacity:0; transition:opacity .25s ease;
+}
+.ann-fig.ready img{opacity:1}
+.ann-fig.ready::after{display:none}
+.ann-fig::after{                      /* แถบไล่สีวิ่ง บอกว่ากำลังโหลดอยู่ ไม่ได้ค้าง */
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(90deg,transparent,#FFFDF8AA,transparent);
+  background-size:200% 100%;
+  animation:annShimmer 1.3s linear infinite;
+}
+
+/* --- รูปย่อในรายการ --- */
+.ann-row{display:flex; gap:12px; align-items:flex-start}
+.ann-text{flex:1; min-width:0}
+.ann-thumb{
+  position:relative; flex:0 0 72px; width:72px; height:72px;
+  border-radius:10px; overflow:hidden; background:var(--line);
+}
+.ann-thumb img{
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:cover; opacity:0; transition:opacity .25s ease;
+}
+.ann-thumb.ready img{opacity:1}
+.ann-thumb.ready::after{display:none}
+.ann-thumb::after{
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(90deg,transparent,#FFFDF8AA,transparent);
+  background-size:200% 100%;
+  animation:annShimmer 1.3s linear infinite;
+}
+
+@keyframes annShimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+
+/* เคารพการตั้งค่าของเครื่องที่ขอให้ลดการเคลื่อนไหว */
+@media (prefers-reduced-motion:reduce){
+  .ann-fig::after,.ann-thumb::after{animation:none}
+  .ann-fig img,.ann-thumb img{transition:none}
+}
+</style>
 </head>
 <body>
 
@@ -70,13 +123,18 @@ function draw() {
 
   $('#content').innerHTML = list.map((i, idx) => `
     <div class="item" data-i="${ITEMS.indexOf(i)}">
-      <div class="meta">
-        ${i.pinned ? '<span class="pin">📌 ปักหมุด</span>' : ''}
-        <span class="tag">${esc(i.category || 'ทั่วไป')}</span>
-        <span>${esc(thDate(i.date))}</span>
+      <div class="ann-row">
+        <div class="ann-text">
+          <div class="meta">
+            ${i.pinned ? '<span class="pin">📌 ปักหมุด</span>' : ''}
+            <span class="tag">${esc(i.category || 'ทั่วไป')}</span>
+            <span>${esc(thDate(i.date))}</span>
+          </div>
+          <div class="title">${esc(i.title)}</div>
+          ${i.summary ? `<div class="excerpt">${esc(i.summary)}</div>` : ''}
+        </div>
+        ${thumbHtml(i)}
       </div>
-      <div class="title">${esc(i.title)}</div>
-      ${i.summary ? `<div class="excerpt">${esc(i.summary)}</div>` : ''}
     </div>`).join('');
 
   $$('#content .item').forEach(el => el.onclick = () => renderDetail(ITEMS[+el.dataset.i]));
@@ -90,7 +148,7 @@ function renderDetail(a) {
         <span class="tag">${esc(a.category || 'ทั่วไป')}</span><span>${esc(thDate(a.date, true))}</span>
       </div>
       <h2 style="font-size:19px;line-height:1.45;margin-bottom:12px">${esc(a.title)}</h2>
-      ${a.imageUrl ? `<img src="${esc(a.imageUrl)}" alt="" style="border-radius:12px;margin-bottom:14px">` : ''}
+      ${heroHtml(a)}
       <div style="font-size:14.5px;line-height:1.85;color:#4A3A2A">${nl2br(a.body || a.summary || '')}</div>
       ${a.fileUrl ? `<a class="btn ghost" style="margin-top:16px" href="${esc(a.fileUrl)}" target="_blank" rel="noopener">📎 เปิดไฟล์แนบ</a>` : ''}
       ${a.linkUrl ? `<a class="btn" style="margin-top:10px" href="${esc(a.linkUrl)}" target="_blank" rel="noopener">เปิดลิงก์ที่เกี่ยวข้อง</a>` : ''}
@@ -100,6 +158,43 @@ function renderDetail(a) {
     </div>`;
   window.scrollTo(0, 0);
 }
+
+/* ================================================================
+ * รูปแนบ
+ *
+ * ★ ทำไมมีทางถอยหลายชั้น (imageUrlLarge → imageUrl)
+ *   ฟิลด์ imageUrl มีมาแต่เดิม ส่วน thumbUrl/imageUrlLarge เป็นของใหม่ที่
+ *   หลังบ้านคำนวณจาก file id หน้านี้กับหลังบ้านคนละที่กันและอัปเดตไม่พร้อมกัน
+ *   ถ้าหน้าเว็บขึ้นก่อน ต้องยังแสดงรูปได้ด้วยฟิลด์เดิม ไม่ใช่รูปหายทั้งหน้า
+ * ================================================================ */
+function hasImg(a)   { return !!(a.hasImage || a.thumbUrl || a.imageUrlLarge || a.imageUrl); }
+function bigUrl(a)   { return a.imageUrlLarge || a.imageUrl || ''; }
+function smallUrl(a) { return a.thumbUrl || a.imageUrlLarge || a.imageUrl || ''; }
+
+function heroHtml(a) {
+  const u = bigUrl(a);
+  if (!u) return '';
+  return `<div class="ann-fig"><img src="${esc(u)}" alt="" decoding="async"
+    onload="annOk(this)" onerror="annFail(this)"></div>`;
+}
+
+function thumbHtml(a) {
+  if (!hasImg(a)) return '';
+  const u = smallUrl(a);
+  if (!u) return '';
+  /* loading="lazy" ปลอดภัยตรงนี้เพราะ .ann-thumb ถูกตรึงขนาด 72px ไว้แล้ว
+     กล่องที่สูง 0 ต่างหากที่ทำให้เบราว์เซอร์คิดว่าทุกใบอยู่ในจอพร้อมกัน
+     แล้วโหลดรูปทั้งหน้าพรวดเดียว */
+  return `<div class="ann-thumb"><img src="${esc(u)}" alt="" width="72" height="72"
+    loading="lazy" decoding="async" onload="annOk(this)" onerror="annFail(this)"></div>`;
+}
+
+function annOk(img) { img.parentElement?.classList.add('ready'); }
+
+/* ★ รูปเสีย = ประกาศข้อความธรรมดา ไม่ใช่ไอคอนรูปแตกและไม่ใช่กล่องเทาว่าง
+   ไฟล์ใน Drive ถูกลบหรือถูกถอนสิทธิ์แชร์เมื่อไหร่ก็เกิดเคสนี้ได้ตลอด
+   ต้องเอากล่องออกทั้งกล่อง ไม่ใช่แค่ซ่อน <img> ไม่งั้นจะเหลือช่องว่างค้าง */
+function annFail(img) { img.parentElement?.remove(); }
 
 function backToList() { renderList(); window.scrollTo(0, 0); }
 </script>

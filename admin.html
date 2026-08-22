@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>แผงควบคุม HR | โก๋ในซอย HR Hub</title>
+<link rel="stylesheet" href="app.css">
+<style>
+/* =================================================================
+ *  สไตล์เฉพาะแผงควบคุม — ใช้ตัวแปรสีจาก app.css เท่านั้น
+ *  ★ ห้ามใช้ --accent เป็นสีตัวอักษร (contrast 2.2:1 บนพื้นขาว) ให้ใช้ --accent-ink
+ * ================================================================= */
+
+/* จอใหญ่ = คอลัมน์ที่สอง ไม่ใช่แอปคนละตัว
+   งานประจำวันสองอย่าง (ตอบเรื่อง/แก้ตาราง) ทำบนมือถือ ส่วนจอใหญ่ช่วยตอนไล่ดูหลายเรื่องรวด */
+.split{display:grid;grid-template-columns:1fr;gap:14px;align-items:start}
+@media(min-width:920px){
+  .wrap.adm{max-width:1120px}
+  .split{grid-template-columns:minmax(320px,380px) 1fr}
+  #listCol{position:sticky;top:12px;max-height:calc(100vh - 40px);overflow:auto;padding-right:2px}
+  #listCol::-webkit-scrollbar{width:6px}
+  #listCol::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+}
+@media(max-width:919px){
+  .split.detail-open #listCol{display:none}
+  .split:not(.detail-open) #detailCol{display:none}
+}
+
+.adm-tabs{display:flex;gap:8px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none}
+.adm-tabs::-webkit-scrollbar{display:none}
+.cnt{display:inline-block;min-width:20px;padding:0 6px;margin-left:6px;border-radius:999px;
+  background:rgba(49,34,21,.10);font-size:11px;font-weight:700;line-height:18px;text-align:center}
+.chip.active .cnt{background:rgba(255,255,255,.24)}
+.cnt.hot{background:#FDECEA;color:var(--danger)}
+.chip.active .cnt.hot{background:#fff;color:var(--danger)}
+
+.item.on{border-color:var(--primary);box-shadow:0 0 0 3px rgba(107,74,43,.08)}
+.item .row1{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.back{display:inline-flex;align-items:center;gap:6px;background:none;border:0;color:var(--primary);
+  font-family:inherit;font-size:13.5px;font-weight:600;padding:6px 0;cursor:pointer}
+@media(min-width:920px){.back{display:none}}
+
+.detail-body{white-space:pre-wrap;font-size:14px;line-height:1.75;color:#503C29;
+  background:#FBF6EF;border:1px solid var(--line);border-radius:12px;padding:14px}
+
+/* ---- แถบวันที่ ---- */
+.daybar{display:flex;gap:6px;align-items:stretch;margin-bottom:12px}
+.daybar .nav{flex:0 0 34px;background:#fff;border:1px solid var(--line);border-radius:10px;
+  font-size:17px;color:var(--primary);cursor:pointer;font-family:inherit}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;flex:1;min-width:0}
+.dbtn{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 2px;cursor:pointer;
+  font-family:inherit;color:var(--ink);text-align:center;line-height:1.25;transition:.16s}
+.dbtn .w{font-size:10px;color:var(--sub)}
+.dbtn .n{font-size:15px;font-weight:700}
+.dbtn.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.dbtn.on .w{color:rgba(255,255,255,.8)}
+.dbtn.past{opacity:.55}
+
+/* ---- แถวคน ---- */
+.prow{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);
+  border-radius:12px;padding:11px 12px;margin-bottom:8px;cursor:pointer;transition:.16s}
+.prow:active{transform:scale(.995)}
+.prow.dirty{border-color:var(--accent);background:#FFFBF4;box-shadow:0 0 0 3px rgba(219,166,107,.18)}
+.prow.picked{border-color:var(--primary);box-shadow:0 0 0 3px rgba(107,74,43,.10)}
+.prow .who{flex:1;min-width:0}
+.prow .who .n{font-size:14px;font-weight:600;line-height:1.35}
+.prow .who .p{font-size:11px;color:var(--sub)}
+.prow .box{flex:0 0 20px;height:20px;border:1.5px solid var(--line);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff}
+.prow.picked .box{background:var(--primary);border-color:var(--primary)}
+
+.sc{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);
+  border-left-width:4px;border-radius:8px;padding:4px 9px;font-size:12px;font-weight:600;color:var(--ink);
+  white-space:nowrap}
+.sc .t{font-weight:400;color:var(--sub);font-size:11px}
+.sc.none{border-left-color:var(--line);color:var(--sub);font-weight:500;font-style:normal}
+.arrow{color:var(--accent-ink);font-weight:700;margin:0 4px}
+.mflag{font-size:10px;color:var(--accent-ink);font-weight:600;margin-top:2px}
+
+/* ---- bottom sheet ---- */
+.sheet-bg{position:fixed;inset:0;background:rgba(49,34,21,.42);opacity:0;pointer-events:none;
+  transition:.2s;z-index:60}
+.sheet-bg.open{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:61;background:var(--card);
+  border-radius:20px 20px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom));
+  transform:translateY(110%);transition:.24s cubic-bezier(.2,.8,.2,1);
+  max-height:86vh;overflow:auto;box-shadow:0 -8px 30px rgba(49,34,21,.18)}
+.sheet.open{transform:translateY(0)}
+@media(min-width:920px){
+  .sheet{left:50%;right:auto;bottom:auto;top:50%;width:520px;max-width:92vw;border-radius:18px;
+    transform:translate(-50%,-40%) scale(.96);opacity:0}
+  .sheet.open{transform:translate(-50%,-50%) scale(1);opacity:1}
+}
+.sheet .grab{width:38px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 12px}
+.shift-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin:10px 0}
+.sbtn{text-align:left;background:#fff;border:1px solid var(--line);border-left-width:4px;border-radius:10px;
+  padding:9px 10px;cursor:pointer;font-family:inherit;color:var(--ink);transition:.16s}
+.sbtn .c{font-size:13px;font-weight:700}
+.sbtn .l{font-size:11px;color:var(--sub);line-height:1.4;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sbtn.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.sbtn.on .l{color:rgba(255,255,255,.82)}
+
+.selbar{position:sticky;bottom:0;z-index:5;background:var(--card);border:1px solid var(--line);
+  border-radius:14px;padding:10px 12px;margin-top:12px;box-shadow:var(--shadow);
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.selbar .txt{flex:1;min-width:130px;font-size:13px;font-weight:600}
+.selbar .btn{width:auto;flex:0 0 auto}
+
+.wbox{background:#FBF1DF;border:1px solid #EFD8B4;border-radius:12px;padding:11px 13px;margin-bottom:12px}
+.wbox .t{font-size:12.5px;font-weight:700;color:var(--warn);margin-bottom:4px}
+.wbox ul{margin:0;padding-left:18px;font-size:12px;color:var(--warn);line-height:1.7}
+.hr-sm{height:1px;background:var(--line);margin:12px 0}
+.pillrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="inner">
+    <div class="badge">🛠️ แผงควบคุม HR</div>
+    <h1 id="pageTitle">แผงควบคุม HR</h1>
+    <p id="pageSub">ตอบเรื่อง · อนุมัติลา · แก้ตารางกะ — ทำได้จากมือถือ</p>
+  </div>
+</div>
+
+<div class="wrap adm pull-up">
+  <div id="content"><div class="loading"><div class="spinner"></div><div>กำลังเปิดแผงควบคุม...</div></div></div>
+</div>
+
+<div class="sheet-bg" id="sheetBg"></div>
+<div class="sheet" id="sheet"></div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+/* =================================================================
+ *  แผงควบคุม HR
+ *  ★ ทำไมหน้านี้ถึงมี: งานของ HR ทั้ง 28 อย่างอยู่ในเมนู Google Sheets
+ *    ซึ่งแอป Sheets บนมือถือไม่แสดงเมนูที่เขียนเองและไม่แสดง dialog เลย
+ *    HR จึงทำงานจากโทรศัพท์ไม่ได้แม้แต่อย่างเดียว
+ *  ★ หน้านี้ไม่เคยรับหรือแสดง lineUserId — หลังบ้านไม่ส่งมาให้ตั้งแต่ต้น
+ * ================================================================= */
+
+let HOME = null;
+let TAB  = 'tickets';
+let TK   = { filter: 'open', items: [], counts: {}, sel: null, detail: null, busy: false };
+let LV   = { filter: 'pending', items: [], counts: {}, sel: null, busy: false };
+let DAY  = { date: '', dept: '', data: null, pend: {}, multi: false, picked: {}, base: '', busy: false };
+
+/* ---------- opId: กันการกดส่งซ้ำตอน wifi ร้านหลุด ---------- */
+/**
+ * ขอ opId ที่ผูกกับเป้าหมายของงานนั้นจริง ๆ
+ *
+ * ★ ทำไมต้องผูกกับ key
+ *   เดิม opId เกิดครั้งเดียวต่ออ็อบเจ็กต์สถานะของแท็บ และลบทิ้งเมื่อสำเร็จเท่านั้น
+ *   ถ้าคำตอบจากเซิร์ฟเวอร์หายกลางทาง (wifi ร้านหลุด) opId เดิมจะค้างอยู่
+ *   พอผู้ใช้เปลี่ยนไปทำ "เรื่องอื่น" หรือ "วันอื่น" แล้วกดบันทึก เซิร์ฟเวอร์จะเห็น
+ *   opId ซ้ำแล้วเล่นผลลัพธ์เก่ากลับมา = งานใหม่ถูกทิ้งเงียบ ๆ ทั้งที่จอบอกว่าสำเร็จ
+ *   การผูกกับ key ทำให้เปลี่ยนเป้าหมายเมื่อไหร่ก็ได้ opId ใหม่เสมอ
+ *   แต่กดซ้ำที่เป้าหมายเดิมยังกันซ้ำได้เหมือนเดิม
+ */
+function opFor(state, key) {
+  if (state._opK !== key) { state._opK = key; state._op = newOpId(); }
+  return state._op;
+}
+function opClear(state) { delete state._op; delete state._opK; }
+
+function newOpId() {
+  try { if (crypto && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, ''); } catch (e) {}
+  return 'op' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+}
+
+/* ---------- เรียก API ----------
+ * ★ ต้องหยิบ ID token ใหม่ "ตอนกดส่ง" ไม่ใช่ตอนเปิดหน้า
+ *   หัวหน้ากะเปิดหน้านี้ค้างไว้ทั้งกะแล้วค่อยกดส่ง token ที่ได้ตอนเปิดหน้าหมดอายุไปแล้ว
+ *   ผลคือขึ้น error กว้าง ๆ ที่ไม่มีใครเดาสาเหตุออก
+ * ★ ใส่เวลาหมดเวลาไว้ด้วย เพราะ fetch ใน app.js ไม่มี timeout เลย
+ *   สัญญาณในร้านตกแล้วหน้าจะค้างที่ "กำลังบันทึก..." ตลอดกาล */
+async function adminApi(name, payload = {}, ms = 25000) {
+  try { const t = liff.getIDToken(); if (t) ID_TOKEN = t; } catch (e) {}
+
+  let timer;
+  const timeout = new Promise(res => {
+    timer = setTimeout(() => res({ ok: false, code: 'TIMEOUT',
+      message: 'เซิร์ฟเวอร์ตอบช้าผิดปกติ (สัญญาณอาจไม่ดี) — กดส่งอีกครั้งได้เลย ระบบกันการบันทึกซ้ำไว้ให้แล้ว' }), ms);
+  });
+  const r = await Promise.race([api(name, payload), timeout]);
+  clearTimeout(timer);
+
+  if (r && r.code === 'AUTH') {
+    r.message = 'ระบบต้องยืนยันตัวตนใหม่ กำลังพากลับไปเข้าสู่ระบบ...';
+    setTimeout(() => { try { liff.login({ redirectUri: location.href }); } catch (e) { location.reload(); } }, 1200);
+  }
+  return r;
+}
+
+/* =================================================================
+ *  เปิดหน้า
+ * ================================================================= */
+(async function () {
+  try {
+    await initLiff('admin');
+    const r = await adminApi('admin_home');
+    if (!r.ok) return denied(r);
+    HOME = r;
+    DAY.dept = (HOME.depts && HOME.depts[0]) || '';
+    DAY.date = HOME.today;
+    DAY.base = HOME.today;
+    renderShell();
+    switchTab('tickets');
+  } catch (e) { bootFail(e); }
+})();
+
+function denied(r) {
+  $('#content').innerHTML = `<div class="card">
+    <div class="empty"><div class="ico">🔒</div>
+      <div class="strong">${esc(r.message || 'คุณไม่มีสิทธิ์เข้าหน้านี้')}</div>
+      <div class="tiny" style="margin-top:8px">หน้านี้เปิดได้เฉพาะหัวหน้าแผนก ทีม HR และผู้ดูแลระบบ<br>
+        ถ้าคิดว่าเป็นความผิดพลาด กรุณาแจ้ง HR ให้ตรวจคอลัมน์ role ในทะเบียนพนักงาน</div></div>
+  </div>`;
+}
+
+const ROLE_TH = { supervisor: 'หัวหน้าแผนก', hr: 'ทีม HR', admin: 'ผู้ดูแลระบบ' };
+
+function renderShell() {
+  $('#pageSub').textContent =
+    (ROLE_TH[HOME.role] || HOME.role) + (HOME.scopeAll ? ' · ดูแลทุกแผนก' : ' · แผนก ' + (HOME.myDept || 'ยังไม่ระบุ'));
+
+  $('#content').innerHTML = `
+    ${HOME.warning ? `<div class="alert info">${esc(HOME.warning)}</div>` : ''}
+    <div class="adm-tabs" id="tabs"></div>
+    <div id="view"></div>`;
+  drawTabs();
+}
+
+function drawTabs() {
+  const c = HOME.counts || {};
+  const tabs = [
+    { id: 'tickets', label: '📬 เรื่องถึง HR', n: c.ticketOpen, hot: c.ticketOverdue > 0 },
+    { id: 'leaves',  label: '🌴 ใบลา',        n: c.leavePending, hot: false },
+    { id: 'day',     label: '🗓️ ตารางวัน',    n: null, hot: false }
+  ];
+  $('#tabs').innerHTML = tabs.map(t => `
+    <button class="chip ${TAB === t.id ? 'active' : ''}" data-tab="${t.id}">${t.label}${
+      t.n ? `<span class="cnt ${t.hot ? 'hot' : ''}">${t.n}</span>` : ''}</button>`).join('');
+  $$('#tabs .chip').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+}
+
+function switchTab(id) {
+  TAB = id; drawTabs();
+  if (id === 'tickets') return loadTickets();
+  if (id === 'leaves')  return loadLeaves();
+  return loadDay();
+}
+
+/* ปรับตัวเลขบนแท็บโดยไม่ต้องยิง admin_home ใหม่ */
+function bumpCount(key, delta) {
+  if (!HOME.counts) return;
+  HOME.counts[key] = Math.max(0, (HOME.counts[key] || 0) + delta);
+  drawTabs();
+}
+
+/* =================================================================
+ *  1) กล่องเรื่องถึง HR
+ * ================================================================= */
+async function loadTickets(keepSel) {
+  showLoading('#view', 'กำลังโหลดเรื่องที่เข้ามา...');
+  const r = await adminApi('admin_tickets', { filter: TK.filter });
+  if (!r.ok) return showError('#view', r.message || 'โหลดข้อมูลไม่สำเร็จ', true);
+  TK.items = r.items; TK.counts = r.counts;
+  if (!keepSel) { TK.sel = null; TK.detail = null; }
+  HOME.counts.ticketOpen = r.counts.open;
+  HOME.counts.ticketOverdue = r.counts.overdue;
+  drawTabs();
+  drawTickets();
+}
+
+function drawTickets() {
+  const c = TK.counts;
+  $('#view').innerHTML = `
+    <div class="chips">
+      ${chipHtml('open', 'ค้างอยู่', c.open, c.open > 0, TK.filter)}
+      ${chipHtml('overdue', 'เกินกำหนด', c.overdue, c.overdue > 0, TK.filter, true)}
+      ${chipHtml('all', 'ทั้งหมด', c.all, false, TK.filter)}
+    </div>
+    <div class="split ${TK.sel ? 'detail-open' : ''}" id="split">
+      <div id="listCol"></div>
+      <div id="detailCol"></div>
+    </div>`;
+  $$('#view .chips .chip').forEach(b => b.onclick = () => { TK.filter = b.dataset.f; loadTickets(); });
+  drawTicketList();
+  drawTicketDetail();
+}
+
+function chipHtml(id, label, n, hot, cur, alwaysShow) {
+  return `<button class="chip ${cur === id ? 'active' : ''}" data-f="${id}">${esc(label)}${
+    (n || alwaysShow) ? `<span class="cnt ${hot ? 'hot' : ''}">${n || 0}</span>` : ''}</button>`;
+}
+
+function drawTicketList() {
+  const el = $('#listCol');
+  if (!TK.items.length) {
+    return showEmpty(el, '🎉', 'ไม่มีเรื่องในหมวดนี้',
+      TK.filter === 'open' ? 'ตอบครบทุกเรื่องแล้ว' : '');
+  }
+  el.innerHTML = TK.items.map(t => `
+    <div class="item ${TK.sel === t.ticketId ? 'on' : ''}" data-id="${esc(t.ticketId)}">
+      <div class="meta">
+        ${t.overdue ? '<span class="tag red">เกินกำหนด</span>' : ''}
+        ${!t.open ? '<span class="tag green">' + esc(t.status) + '</span>' : ''}
+        ${t.anonymous ? '<span class="tag gold">🔒 ไม่ระบุตัวตน</span>'
+                      : (t.privacy === 'hr_only' ? '<span class="tag gold">🔒 เฉพาะ HR</span>' : '')}
+        <span>${esc(t.category)}</span>
+      </div>
+      <div class="row1">
+        <div class="title">${esc(t.subject)}</div>
+      </div>
+      <div class="excerpt">${esc(t.who)}${t.dept ? ' · ' + esc(t.dept) : ''} · ส่ง ${esc(thDate(t.createdAt))}
+        ${t.slaDue ? ' · ครบกำหนด ' + esc(thDate(t.slaDue)) : ''}</div>
+    </div>`).join('');
+  $$('#listCol .item').forEach(b => b.onclick = () => openTicket(b.dataset.id));
+}
+
+async function openTicket(id) {
+  TK.sel = id; TK.detail = null;
+  drawTicketList();
+  $('#split').classList.add('detail-open');
+  showLoading('#detailCol', 'กำลังเปิดเรื่อง...');
+  const r = await adminApi('admin_ticket', { ticketId: id });
+  if (!r.ok) return showError('#detailCol', r.message || 'เปิดเรื่องไม่สำเร็จ');
+  TK.detail = r.ticket;
+  drawTicketDetail();
+}
+
+function drawTicketDetail() {
+  const el = $('#detailCol');
+  if (!TK.sel) {
+    return showEmpty(el, '📬', 'เลือกเรื่องทางซ้ายเพื่ออ่านและตอบ',
+      'หน้ารายการไม่แสดงเนื้อหาเรื่อง เพื่อไม่ให้เนื้อความหลุดตาคนที่เดินผ่านหน้าจอ');
+  }
+  const t = TK.detail;
+  if (!t) return;
+  const draft = localStorage.getItem(draftKey(t.ticketId)) || '';
+
+  el.innerHTML = `
+    <button class="back" onclick="closeTicket()">‹ กลับไปที่รายการ</button>
+    <div class="card">
+      <div class="pillrow">
+        <span class="tag">${esc(t.ticketId)}</span>
+        <span class="tag">${esc(t.category)}</span>
+        ${t.overdue ? '<span class="tag red">เกินกำหนด</span>' : ''}
+        ${t.anonymous ? '<span class="tag gold">🔒 ไม่ระบุตัวตน</span>'
+                      : (t.privacy === 'hr_only' ? '<span class="tag gold">🔒 เฉพาะ HR</span>' : '')}
+        <span class="tag ${t.open ? 'gold' : 'green'}">${esc(t.status)}</span>
+      </div>
+      <h2 style="margin-top:6px">${esc(t.subject)}</h2>
+      <div class="kv"><span class="k">ผู้แจ้ง</span><span class="v">${esc(t.who)}</span></div>
+      ${t.dept ? `<div class="kv"><span class="k">แผนก</span><span class="v">${esc(t.dept)}</span></div>` : ''}
+      <div class="kv"><span class="k">ส่งเมื่อ</span><span class="v">${esc(thDate(t.createdAt, true))}</span></div>
+      ${t.slaDue ? `<div class="kv"><span class="k">ครบกำหนดตอบ</span><span class="v">${esc(thDate(t.slaDue, true))}</span></div>` : ''}
+      <div class="divider"></div>
+      <div class="detail-body">${esc(t.detail || '(ไม่มีรายละเอียด)')}</div>
+      ${t.attachment ? `<p class="tiny" style="margin-top:8px">ไฟล์แนบ: ${esc(t.attachment)}</p>` : ''}
+    </div>
+
+    ${t.reply ? `<div class="card flat">
+      <div class="eyebrow">คำตอบที่บันทึกไว้แล้ว</div>
+      <div class="detail-body">${esc(t.reply)}</div>
+    </div>` : ''}
+
+    <div class="card">
+      ${!t.canNotify ? `<div class="alert info">
+        <strong>เรื่องนี้แจ้งกลับถึงตัวผู้แจ้งไม่ได้</strong><br>
+        ${t.anonymous
+          ? 'ผู้แจ้งเลือก “ไม่ระบุตัวตน” ระบบจึงไม่มีทางติดต่อเขา คำตอบจะถูกบันทึกไว้เป็นหลักฐานและปิดเรื่องให้ ถ้าต้องการให้ทุกคนรู้ผล ให้ประกาศแบบรวมผ่านเมนูประกาศแทน'
+          : 'เรื่องนี้ไม่มีบัญชีไลน์ผูกไว้ กรุณาติดต่อผู้แจ้งโดยตรง'}
+      </div>` : `<p class="tiny" style="margin:0 0 10px">
+        ส่งแล้วระบบจะ<strong>ติดจุดแดง</strong>บนเมนู “ติดต่อ HR” ของผู้แจ้ง (ใช้โควตาข้อความ 0)
+        เขาจะเห็นคำตอบเมื่อเปิดเมนูนั้น</p>`}
+
+      <div class="field" style="margin-bottom:10px">
+        <label for="reply">คำตอบถึงผู้แจ้ง</label>
+        <textarea id="reply" maxlength="3000" placeholder="พิมพ์คำตอบ...">${esc(draft || t.reply || '')}</textarea>
+        <div class="tiny" id="rc" style="text-align:right;margin-top:4px"></div>
+      </div>
+      ${t.canNotify ? `<label class="radio" style="margin-bottom:12px" id="closeWrap">
+        <input type="checkbox" id="closeToo">
+        <div><div class="t">ปิดเรื่องนี้ไปเลย</div>
+        <div class="d">ถ้าไม่ติ๊ก สถานะจะเป็น “ตอบแล้ว” และรอปิดเมื่อจบเรื่องจริง</div></div>
+      </label>` : ''}
+      <div id="tkMsg"></div>
+      <button class="btn" id="send">${t.canNotify ? 'ส่งคำตอบ' : 'บันทึกคำตอบและปิดเรื่อง'}</button>
+    </div>`;
+
+  const ta = $('#reply');
+  const upd = () => $('#rc').textContent = `${ta.value.length} / 3000`;
+  ta.oninput = () => { upd(); localStorage.setItem(draftKey(t.ticketId), ta.value); };
+  upd();
+  $('#send').onclick = sendReply;
+}
+
+function draftKey(id) { return 'koh.admin.reply.' + id; }
+
+function closeTicket() {
+  TK.sel = null; TK.detail = null;
+  $('#split').classList.remove('detail-open');
+  drawTicketList(); drawTicketDetail();
+}
+
+async function sendReply() {
+  if (TK.busy) return;
+  const t = TK.detail;
+  const text = $('#reply').value.trim();
+  if (text.length < 2) { toast('กรุณาพิมพ์คำตอบก่อน'); return; }
+
+  const btn = $('#send');
+  TK.busy = true; btn.disabled = true; btn.textContent = 'กำลังส่ง...';
+  /* opId คงที่ตลอดการกดชุดนี้ — กดซ้ำ/กดปุ่มลองใหม่จะได้ผลลัพธ์เดิม ไม่ตอบซ้ำสองครั้ง */
+  const opId = opFor(TK, 'tk|' + t.ticketId);
+
+  const r = await adminApi('admin_ticket_reply', {
+    ticketId: t.ticketId, reply: text,
+    close: $('#closeToo') ? $('#closeToo').checked : true, opId
+  });
+
+  TK.busy = false; btn.disabled = false;
+  btn.textContent = t.canNotify ? 'ส่งคำตอบ' : 'บันทึกคำตอบและปิดเรื่อง';
+
+  if (!r.ok) {
+    $('#tkMsg').innerHTML = `<div class="alert err">${esc(r.message || 'ส่งไม่สำเร็จ')}</div>`;
+    return;
+  }
+  opClear(TK);
+  localStorage.removeItem(draftKey(t.ticketId));
+
+  /* ★ แยกให้ชัดระหว่าง "ตอบแล้ว" กับ "ตอบแล้วแต่แจ้งเตือนไม่ถึงเขา"
+     สองอย่างนี้ต้องการการกระทำต่อคนละแบบ ถ้าแสดงเหมือนกันคือการโกหก HR */
+  $('#tkMsg').innerHTML = `<div class="alert ${r.notified ? 'ok' : 'info'}">${esc(r.message || '')}</div>`;
+  toast(r.notified ? 'ส่งคำตอบแล้ว' : 'บันทึกคำตอบแล้ว');
+  await loadTickets(true);
+  await openTicket(t.ticketId);
+}
+
+/* =================================================================
+ *  2) คิวอนุมัติลา
+ *  ★ ตั้งใจไม่เขียนกลับเข้าตาราง Schedule เป็นกะ LV
+ *    มันจะกลายเป็นทางเขียนที่สองเข้าตารางกะ ให้หัวหน้ากะตั้ง LV
+ *    ในแท็บ "ตารางวัน" เอง ซึ่งเห็นภาพรวมทั้งวันว่าใครมาแทน
+ * ================================================================= */
+async function loadLeaves(keepSel) {
+  showLoading('#view', 'กำลังโหลดใบลา...');
+  const r = await adminApi('admin_leaves', { filter: LV.filter });
+  if (!r.ok) return showError('#view', r.message || 'โหลดข้อมูลไม่สำเร็จ', true);
+  LV.items = r.items; LV.counts = r.counts;
+  if (!keepSel) LV.sel = null;
+  HOME.counts.leavePending = r.counts.pending;
+  drawTabs();
+  drawLeaves();
+}
+
+function drawLeaves() {
+  const c = LV.counts;
+  $('#view').innerHTML = `
+    <div class="chips">
+      ${chipHtml('pending', 'รออนุมัติ', c.pending, c.pending > 0, LV.filter, true)}
+      ${chipHtml('decided', 'ตัดสินแล้ว', c.decided, false, LV.filter)}
+      ${chipHtml('all', 'ทั้งหมด', c.all, false, LV.filter)}
+    </div>
+    <div class="split ${LV.sel ? 'detail-open' : ''}" id="split">
+      <div id="listCol"></div><div id="detailCol"></div>
+    </div>`;
+  $$('#view .chips .chip').forEach(b => b.onclick = () => { LV.filter = b.dataset.f; loadLeaves(); });
+  drawLeaveList(); drawLeaveDetail();
+}
+
+function drawLeaveList() {
+  const el = $('#listCol');
+  if (!LV.items.length) return showEmpty(el, '✅', 'ไม่มีใบลาในหมวดนี้');
+  el.innerHTML = LV.items.map(l => `
+    <div class="item ${LV.sel === l.leaveId ? 'on' : ''}" data-id="${esc(l.leaveId)}">
+      <div class="meta">
+        ${l.pending ? '<span class="tag gold">รออนุมัติ</span>'
+                    : `<span class="tag ${l.status === 'อนุมัติ' ? 'green' : 'red'}">${esc(l.status)}</span>`}
+        <span>${esc(l.type || 'ลา')}</span>
+      </div>
+      <div class="title">${esc(l.who)} · ${esc(thDate(l.dateFrom))}${
+        l.dateTo && l.dateTo !== l.dateFrom ? ' – ' + esc(thDate(l.dateTo)) : ''}</div>
+      <div class="excerpt">${l.dept ? esc(l.dept) + ' · ' : ''}${esc(String(l.days || '1'))} วัน${
+        l.reason ? ' · ' + esc(l.reason) : ''}</div>
+    </div>`).join('');
+  $$('#listCol .item').forEach(b => b.onclick = () => { LV.sel = b.dataset.id; drawLeaveList(); $('#split').classList.add('detail-open'); drawLeaveDetail(); });
+}
+
+function drawLeaveDetail() {
+  const el = $('#detailCol');
+  if (!LV.sel) return showEmpty(el, '🌴', 'เลือกใบลาเพื่อดูรายละเอียดและตัดสิน');
+  const l = LV.items.find(x => x.leaveId === LV.sel);
+  if (!l) return showEmpty(el, '🌴', 'ไม่พบใบลานี้แล้ว');
+
+  el.innerHTML = `
+    <button class="back" onclick="closeLeave()">‹ กลับไปที่รายการ</button>
+    <div class="card">
+      <div class="pillrow">
+        <span class="tag">${esc(l.leaveId)}</span>
+        ${l.pending ? '<span class="tag gold">รออนุมัติ</span>'
+                    : `<span class="tag ${l.status === 'อนุมัติ' ? 'green' : 'red'}">${esc(l.status)}</span>`}
+      </div>
+      <h2 style="margin-top:6px">${esc(l.who)}</h2>
+      <div class="kv"><span class="k">ประเภท</span><span class="v">${esc(l.type || '-')}</span></div>
+      <div class="kv"><span class="k">วันที่ลา</span><span class="v">${esc(thDate(l.dateFrom, true))}${
+        l.dateTo && l.dateTo !== l.dateFrom ? ' – ' + esc(thDate(l.dateTo, true)) : ''}</span></div>
+      <div class="kv"><span class="k">จำนวน</span><span class="v">${esc(String(l.days || '1'))} วัน</span></div>
+      ${l.dept ? `<div class="kv"><span class="k">แผนก</span><span class="v">${esc(l.dept)}</span></div>` : ''}
+      <div class="kv"><span class="k">ยื่นเมื่อ</span><span class="v">${esc(thDate(l.createdAt, true))}</span></div>
+      <div class="divider"></div>
+      <div class="detail-body">${esc(l.reason || '(ไม่ได้ระบุเหตุผล)')}</div>
+      ${!l.pending ? `<p class="tiny" style="margin-top:10px">ตัดสินโดย ${esc(l.approver || '-')} เมื่อ ${
+        esc(l.decidedAt || '-')}${l.remark ? ' · หมายเหตุ: ' + esc(l.remark) : ''}</p>` : ''}
+    </div>
+
+    ${l.pending ? `<div class="card">
+      <div class="field" style="margin-bottom:10px">
+        <label for="remark">หมายเหตุถึงผู้ขอ</label>
+        <div class="hint">กรณีไม่อนุมัติ ต้องระบุเหตุผล ไม่งั้นเขาจะเดินมาถามอยู่ดี</div>
+        <textarea id="remark" maxlength="500" style="min-height:80px" placeholder="เช่น ช่วงนั้นคนไม่พอ ขอเลื่อนเป็นวันที่..."></textarea>
+      </div>
+      <div id="lvMsg"></div>
+      <div class="btn-row">
+        <button class="btn" id="ok">✅ อนุมัติ</button>
+        <button class="btn danger" id="no">ไม่อนุมัติ</button>
+      </div>
+      <p class="tiny center" style="margin:10px 0 0">
+        ระบบจะติดจุดแดงแจ้งผู้ขอบนเมนู “ติดต่อ HR” (ใช้โควตาข้อความ 0)<br>
+        ★ การอนุมัติไม่ได้ใส่กะ LV ในตารางให้อัตโนมัติ — ให้ไปตั้งเองที่แท็บ “ตารางวัน”
+      </p>
+    </div>` : ''}`;
+
+  if (l.pending) {
+    $('#ok').onclick = () => decide('approve');
+    $('#no').onclick = () => decide('reject');
+  }
+}
+
+function closeLeave() { LV.sel = null; $('#split').classList.remove('detail-open'); drawLeaveList(); drawLeaveDetail(); }
+
+async function decide(decision) {
+  if (LV.busy) return;
+  const l = LV.items.find(x => x.leaveId === LV.sel);
+  const remark = $('#remark').value.trim();
+  if (decision === 'reject' && remark.length < 2) {
+    $('#lvMsg').innerHTML = '<div class="alert err">กรณีไม่อนุมัติ กรุณาระบุเหตุผลสั้น ๆ ให้ผู้ขอด้วย</div>';
+    return;
+  }
+  if (!confirm(`${decision === 'approve' ? 'อนุมัติ' : 'ไม่อนุมัติ'}ใบลาของ ${l.who} ?`)) return;
+
+  LV.busy = true; $('#ok').disabled = true; $('#no').disabled = true;
+  const opId = opFor(LV, 'lv|' + l.leaveId + '|' + decision);
+  const r = await adminApi('admin_leave_decide', { leaveId: l.leaveId, decision, remark, opId });
+  LV.busy = false;
+
+  if (!r.ok) {
+    $('#ok').disabled = false; $('#no').disabled = false;
+    $('#lvMsg').innerHTML = `<div class="alert err">${esc(r.message || 'บันทึกไม่สำเร็จ')}</div>`;
+    return;
+  }
+  opClear(LV);
+  toast(r.notified ? 'บันทึกและแจ้งผู้ขอแล้ว' : 'บันทึกแล้ว (แจ้งผู้ขอไม่สำเร็จ)');
+  await loadLeaves(true);
+  drawLeaveDetail();
+  if (!r.notified) {
+    const box = $('#detailCol');
+    if (box) box.insertAdjacentHTML('afterbegin', `<div class="alert info">${esc(r.message)}</div>`);
+  }
+}
+
+/* =================================================================
+ *  3) ตัวแก้ตารางรายวัน
+ * -----------------------------------------------------------------
+ *  ★★ กฎเหล็กของหน้านี้: ทุกการแก้ของคน จะถูกตั้ง status = 'manual' ให้อัตโนมัติ
+ *     ฝั่งเซิร์ฟเวอร์ (ไม่ใช่ฝั่งนี้) เพราะตัวสร้างตารางจากรูปแบบจะเก็บแถวไว้
+ *     เฉพาะเมื่อ status เป็นคำว่า 'manual' ตัวพิมพ์เล็กเป๊ะ ๆ เท่านั้น
+ *     หัวหน้ากะที่แก้ตารางวันเสาร์แล้วไม่ได้พิมพ์คำนี้ จะถูกเขียนทับหายเงียบ ๆ
+ *     ในการสร้างตารางรอบถัดไป ไม่มี warning ไม่มี undo
+ *  ★ ไม่ทำ grid ทั้งเดือนแบบลากวาง — งานจริงคือ "คนนี้ลาป่วย ย้ายคนนี้มากะเช้า"
+ * ================================================================= */
+async function loadDay() {
+  showLoading('#view', 'กำลังโหลดตาราง...');
+  const r = await adminApi('admin_day', { date: DAY.date, dept: DAY.dept });
+  if (!r.ok) {
+    if (r.code === 'NO_DEPT' || r.code === 'INPUT') {
+      $('#view').innerHTML = `<div class="card"><div class="alert info">${esc(r.message)}</div></div>`;
+      return;
+    }
+    return showError('#view', r.message || 'โหลดตารางไม่สำเร็จ', true);
+  }
+  DAY.data = r; DAY.dept = r.dept; DAY.pend = {}; DAY.picked = {}; DAY.multi = false;
+  drawDay();
+}
+
+function shiftInfo(code) {
+  return (DAY.data.shifts || []).find(s => s.shiftCode === code) || null;
+}
+
+/* ★ บวกวันด้วยเที่ยงวัน UTC เสมอ
+   ถ้าใช้ new Date(iso+'T00:00:00+07:00').toISOString() วันจะเลื่อนไปข้างหลังหนึ่งวัน
+   เพราะ toISOString คืนเวลา UTC (00:00 ของไทย = 17:00 ของเมื่อวานในโซน UTC)
+   เที่ยงวัน UTC ห่างจากเส้นแบ่งวันทั้งสองฝั่ง 12 ชั่วโมง จึงปลอดภัยทุกโซนเวลา */
+function addDaysISO(iso, n) {
+  const d = new Date(String(iso).slice(0, 10) + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function thDowShort(iso) {
+  const d = new Date(String(iso).slice(0, 10) + 'T12:00:00Z');
+  return isNaN(d) ? '' : TH_DS[d.getUTCDay()];
+}
+
+function drawDay() {
+  const d = DAY.data;
+  const today = todayISO();
+
+  /* แถบ 7 วัน — เลื่อนเป็นชุดละสัปดาห์ */
+  const days = [];
+  for (let i = 0; i < 7; i++) days.push(addDaysISO(DAY.base, i));
+
+  $('#view').innerHTML = `
+    <div class="daybar">
+      <button class="nav" id="prev" title="สัปดาห์ก่อน">‹</button>
+      <div class="days">${days.map(x => `
+        <button class="dbtn ${x === DAY.date ? 'on' : ''} ${x < today ? 'past' : ''}" data-d="${x}">
+          <div class="w">${esc(thDowShort(x))}</div>
+          <div class="n">${+x.slice(8, 10)}</div>
+        </button>`).join('')}</div>
+      <button class="nav" id="next" title="สัปดาห์ถัดไป">›</button>
+    </div>
+
+    <div class="card flat" style="padding:12px 14px;margin-bottom:12px">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div style="flex:1;min-width:150px">
+          <div class="eyebrow" style="margin-bottom:2px">${esc(thDay(DAY.date))} ${esc(thDate(DAY.date, true))}</div>
+          ${d.lockedDept
+            ? `<div class="strong">แผนก ${esc(d.dept)}</div>`
+            : `<select id="deptSel">${(d.depts || []).map(x =>
+                `<option value="${esc(x)}" ${x === d.dept ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`}
+        </div>
+        ${d.canEdit ? `<button class="btn ghost sm" id="multi" style="width:auto">
+          ${DAY.multi ? '✕ ออกจากโหมดเลือกหลายคน' : '☑︎ เลือกหลายคน'}</button>` : ''}
+      </div>
+      ${!d.canEdit ? `<div class="alert info" style="margin:10px 0 0">${
+        esc(d.editHint || 'วันนี้แก้ไม่ได้')}</div>` : ''}
+    </div>
+
+    <div id="warnBox"></div>
+    <div id="rows"></div>
+    <div id="saveBar"></div>`;
+
+  $('#prev').onclick = () => shiftWeek(-7);
+  $('#next').onclick = () => shiftWeek(7);
+  $$('#view .dbtn').forEach(b => b.onclick = () => { DAY.date = b.dataset.d; loadDay(); });
+  if ($('#deptSel')) $('#deptSel').onchange = e => { DAY.dept = e.target.value; loadDay(); };
+  if ($('#multi')) $('#multi').onclick = () => { DAY.multi = !DAY.multi; DAY.picked = {}; drawDay(); };
+
+  drawRows();
+}
+
+function shiftWeek(n) {
+  DAY.base = addDaysISO(DAY.base, n);
+  DAY.date = DAY.base;
+  loadDay();
+}
+
+/** รวมข้อมูลของคนหนึ่งคน: แถวจริงในชีต + สิ่งที่ยังไม่ได้บันทึก */
+function personState(code) {
+  const rows = (DAY.data.rows || []).filter(r => r.empCode.toUpperCase() === code.toUpperCase());
+  return { rows, cur: rows[rows.length - 1] || null, pend: DAY.pend[code] || null, dup: rows.length > 1 };
+}
+
+function drawRows() {
+  const d = DAY.data;
+  const el = $('#rows');
+  const people = d.people || [];
+
+  /* คนที่มีแถวในวันนั้นแต่ไม่อยู่ในรายชื่อ active ของแผนก (เช่นเพิ่งย้ายแผนก)
+     ต้องแสดงด้วย ไม่งั้นกะที่ค้างอยู่จะมองไม่เห็นและไม่มีใครไปแก้ */
+  const extra = (d.rows || [])
+    .filter(r => !people.some(p => p.empCode.toUpperCase() === r.empCode.toUpperCase()))
+    .map(r => ({ empCode: r.empCode, name: r.name, position: r.position || '', outside: true }));
+  const seen = {};
+  const list = people.concat(extra).filter(p => {
+    const k = p.empCode.toUpperCase();
+    if (seen[k]) return false; seen[k] = true; return true;
+  });
+
+  if (!list.length) {
+    showEmpty(el, '👥', 'ยังไม่มีพนักงานในแผนกนี้', 'ตรวจคอลัมน์ dept ในทะเบียนพนักงาน');
+    drawWarnings(list); drawSaveBar(); return;
+  }
+
+  el.innerHTML = list.map(p => {
+    const st = personState(p.empCode);
+    const cur = st.cur, pend = st.pend;
+    const now = cur ? chipFor(cur.shiftCode, cur.start, cur.end) : chipFor('', '', '');
+    const next = pend ? (pend.release ? '' : chipFor(pend.shiftCode,
+                  (shiftInfo(pend.shiftCode) || {}).start, (shiftInfo(pend.shiftCode) || {}).end)) : '';
+    return `
+      <div class="prow ${pend ? 'dirty' : ''} ${DAY.picked[p.empCode] ? 'picked' : ''}" data-c="${esc(p.empCode)}">
+        ${DAY.multi ? `<div class="box">${DAY.picked[p.empCode] ? '✓' : ''}</div>` : ''}
+        <div class="who">
+          <div class="n">${esc(p.name)}${p.outside ? ' <span class="tag gold">นอกแผนก</span>' : ''}</div>
+          <div class="p">${esc(p.position || '')}${st.dup ? ' · ⚠️ มี ' + st.rows.length + ' แถวในวันนี้' : ''}</div>
+          ${cur && cur.manual ? `<div class="mflag">แก้เอง${cur.manualBy ? ' โดย ' + esc(cur.manualBy) : ''}${
+            cur.manualAt ? ' · ' + esc(String(cur.manualAt).slice(0, 10)) : ''}</div>` : ''}
+        </div>
+        <div style="text-align:right">
+          ${now}${pend ? `<span class="arrow">→</span>${pend.release
+            ? '<span class="sc none">คืนค่าอัตโนมัติ</span>' : next}` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  $$('#rows .prow').forEach(b => b.onclick = () => {
+    const code = b.dataset.c;
+    if (!DAY.data.canEdit) { toast(DAY.data.editHint || 'วันนี้แก้ไม่ได้'); return; }
+    if (DAY.multi) {
+      if (DAY.picked[code]) delete DAY.picked[code]; else DAY.picked[code] = true;
+      drawRows(); return;
+    }
+    openSheet([code]);
+  });
+
+  drawWarnings(list);
+  drawSaveBar();
+}
+
+function chipFor(code, start, end) {
+  if (!code) return '<span class="sc none">ยังไม่มีกะ</span>';
+  const s = shiftInfo(code) || {};
+  const time = (start || s.start) && (end || s.end) ? `${start || s.start}–${end || s.end}` : '';
+  return `<span class="sc" style="border-left-color:${esc(s.color || 'var(--line)')}">${esc(code)}${
+    time ? ` <span class="t">${esc(time)}</span>` : ''}</span>`;
+}
+
+/* คำเตือนคำนวณฝั่งนี้ทั้งหมด — ไม่ต้องยิงเซิร์ฟเวอร์เพิ่ม
+   ★ ทั้งสามข้อเป็น "คำเตือน" ไม่ใช่ error ที่บล็อกการบันทึก
+     โดยเฉพาะข้อ "ซ้ำ" — ยังไม่ได้ยืนยันกับเจ้าของร้านว่ากะซ้อนมีจริงในร้านไหม
+     ถ้าไปบล็อกไว้แล้วมันมีจริง หัวหน้ากะจะบันทึกงานที่ถูกต้องไม่ได้ */
+function drawWarnings(list) {
+  const w = [];
+  const dup = list.filter(p => personState(p.empCode).dup);
+  const none = list.filter(p => { const s = personState(p.empCode); return !s.cur && !s.pend; });
+  const blank = (DAY.data.rows || []).filter(r => !String(r.shiftCode || '').trim());
+
+  if (dup.length)   w.push(`มีคนที่ถูกใส่ไว้ 2 แถวขึ้นไปในวันเดียวกัน ${dup.length} คน (${dup.map(x => x.name).join(', ')}) — ตรวจว่าตั้งใจให้ซ้อนกะหรือเปล่า`);
+  if (none.length)  w.push(`ยังไม่มีกะ ${none.length} คน: ${none.map(x => x.name).join(', ')}`);
+  if (blank.length) w.push(`มีแถวที่รหัสกะว่างอยู่ ${blank.length} แถว — พนักงานจะเห็นช่องว่างในตารางของตัวเอง`);
+
+  $('#warnBox').innerHTML = w.length
+    ? `<div class="wbox"><div class="t">⚠️ ตรวจก่อนปิดวัน</div><ul>${w.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`
+    : '';
+}
+
+function drawSaveBar() {
+  const n = Object.keys(DAY.pend).length;
+  const picked = Object.keys(DAY.picked).length;
+  const el = $('#saveBar');
+
+  if (DAY.multi && picked) {
+    el.innerHTML = `<div class="selbar">
+      <div class="txt">เลือกไว้ ${picked} คน</div>
+      <button class="btn sm" id="setMany" style="width:auto">ใส่กะให้ทั้งหมด</button>
+      <button class="btn ghost sm" id="clr" style="width:auto">ล้าง</button>
+    </div>`;
+    $('#setMany').onclick = () => openSheet(Object.keys(DAY.picked));
+    $('#clr').onclick = () => { DAY.picked = {}; drawRows(); };
+    return;
+  }
+  if (!n) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="selbar">
+    <div class="txt">แก้ไว้ ${n} รายการ ยังไม่ได้บันทึก</div>
+    <button class="btn sm" id="save" style="width:auto">บันทึก</button>
+    <button class="btn ghost sm" id="undo" style="width:auto">ยกเลิก</button>
+  </div>`;
+  $('#save').onclick = saveDay;
+  $('#undo').onclick = () => { DAY.pend = {}; drawRows(); };
+}
+
+/* ---------- bottom sheet เลือกกะ ---------- */
+let SHEET_FOR = [];
+
+function openSheet(codes) {
+  SHEET_FOR = codes;
+  const d = DAY.data;
+  const one = codes.length === 1 ? personState(codes[0]) : null;
+  const curCode = one && one.pend ? one.pend.shiftCode : (one && one.cur ? one.cur.shiftCode : '');
+  const curNote = one && one.pend ? (one.pend.note || '') : (one && one.cur ? (one.cur.note || '') : '');
+  /* ชื่ออาจอยู่ในรายชื่อพนักงานของแผนก หรืออยู่แค่ในแถวตาราง (กรณีคนที่เพิ่งย้ายแผนก) */
+  const name = codes.length === 1
+    ? (((d.people || []).find(p => p.empCode === codes[0]) ||
+        (d.rows || []).find(r => r.empCode === codes[0]) || {}).name || codes[0])
+    : `${codes.length} คน`;
+
+  $('#sheet').innerHTML = `
+    <div class="grab"></div>
+    <h2 style="margin:0 0 2px">${esc(name)}</h2>
+    <p class="tiny" style="margin:0 0 10px">${esc(thDay(DAY.date))} ${esc(thDate(DAY.date, true))}</p>
+    <div class="shift-grid">
+      ${(d.shifts || []).map(s => `
+        <button class="sbtn ${s.shiftCode === curCode ? 'on' : ''}" data-s="${esc(s.shiftCode)}"
+          style="border-left-color:${esc(s.color)}">
+          <div class="c">${esc(s.shiftCode)}</div>
+          <div class="l">${esc(s.label)}${s.start && s.end ? ' · ' + esc(s.start) + '–' + esc(s.end) : ''}</div>
+        </button>`).join('')}
+    </div>
+    <div class="field" style="margin-bottom:12px">
+      <label for="snote">หมายเหตุ (ถ้ามี)</label>
+      <input type="text" id="snote" maxlength="200" value="${esc(curNote)}" placeholder="เช่น มาแทน สมชาย ที่ลาป่วย">
+    </div>
+    <p class="tiny" style="margin:0 0 12px">
+      ทุกการแก้ในหน้านี้จะถูกตั้งเป็น <strong>“แก้เอง”</strong> ให้อัตโนมัติ
+      การสร้างตารางจากรูปแบบรอบถัดไปจะไม่เขียนทับ
+    </p>
+    ${one && one.cur && one.cur.manual ? `<button class="btn ghost sm" id="release" style="margin-bottom:10px">
+      ↩︎ คืนค่าให้ระบบสร้างทับได้</button>` : ''}
+    <button class="btn" id="apply">ใช้กะนี้</button>
+    <button class="btn ghost" id="cancel" style="margin-top:8px">ยกเลิก</button>`;
+
+  let sel = curCode;
+  $$('#sheet .sbtn').forEach(b => b.onclick = () => {
+    sel = b.dataset.s;
+    $$('#sheet .sbtn').forEach(x => x.classList.toggle('on', x.dataset.s === sel));
+  });
+  $('#apply').onclick = () => {
+    if (!sel) { toast('กรุณาเลือกกะก่อน'); return; }
+    const note = $('#snote').value.trim();
+    SHEET_FOR.forEach(c => DAY.pend[c] = { shiftCode: sel, note });
+    closeSheet(); DAY.picked = {}; DAY.multi = false; drawDay();
+  };
+  $('#cancel').onclick = closeSheet;
+  if ($('#release')) $('#release').onclick = () => {
+    if (!confirm('คืนแถวนี้ให้ระบบดูแลต่อ?\n\nการสร้างตารางจากรูปแบบรอบหน้าจะเขียนทับกะนี้ได้\nใช้เมื่อการแก้ครั้งก่อนหมดความจำเป็นแล้ว')) return;
+    SHEET_FOR.forEach(c => DAY.pend[c] = { release: true });
+    closeSheet(); DAY.picked = {}; DAY.multi = false; drawDay();
+  };
+
+  $('#sheetBg').classList.add('open');
+  $('#sheet').classList.add('open');
+}
+
+function closeSheet() {
+  $('#sheetBg').classList.remove('open');
+  $('#sheet').classList.remove('open');
+}
+$('#sheetBg').onclick = closeSheet;
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+
+async function saveDay() {
+  if (DAY.busy) return;
+  const items = Object.keys(DAY.pend).map(c => Object.assign({ empCode: c }, DAY.pend[c]));
+  if (!items.length) return;
+  if (items.length > 25) { toast('บันทึกได้ครั้งละไม่เกิน 25 คน'); return; }
+
+  DAY.busy = true;
+  const btn = $('#save'); if (btn) { btn.disabled = true; btn.textContent = 'กำลังบันทึก...'; }
+  const opId = opFor(DAY, 'day|' + DAY.date + '|' + DAY.dept + '|' + JSON.stringify(items));
+
+  const r = await adminApi('admin_schedule_set', { date: DAY.date, dept: DAY.dept, items, opId });
+  DAY.busy = false;
+
+  if (!r.ok) {
+    if (btn) { btn.disabled = false; btn.textContent = 'บันทึก'; }
+    /* ★ ไม่ล้าง DAY.pend และไม่ล้าง opId — กดใหม่คือการลองส่ง "คำขอเดิม" ซ้ำ
+       ซึ่งฝั่งเซิร์ฟเวอร์กันซ้ำไว้อยู่แล้ว 10 นาที จึงปลอดภัยกว่าการให้พิมพ์ใหม่ทั้งหมด */
+    $('#saveBar').insertAdjacentHTML('afterbegin',
+      `<div class="alert err">${esc(r.message || 'บันทึกไม่สำเร็จ')} — กดบันทึกอีกครั้งได้เลย</div>`);
+    return;
+  }
+  opClear(DAY);
+  const failed = (r.results || []).filter(x => !x.ok);
+  toast(r.message || 'บันทึกแล้ว');
+  await loadDay();
+  if (failed.length) {
+    $('#warnBox').insertAdjacentHTML('afterbegin',
+      `<div class="alert err">ข้าม ${failed.length} รายการ:<br>${
+        failed.map(f => esc(f.empCode + ' — ' + f.reason)).join('<br>')}</div>`);
+  }
+}
+</script>
+</body>
+</html>
