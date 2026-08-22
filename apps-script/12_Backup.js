@@ -54,11 +54,14 @@ function backupDatabase() {
   var placeholder = dest.getSheets()[0];
   placeholder.setName('__tmp__' + stamp);
 
+  /* copyTo() ต่อท้ายเสมอ การคัดลอกตามลำดับต้นฉบับจึงได้ลำดับที่ถูกอยู่แล้ว
+     หลังลบแท็บกันชนทิ้ง ไม่ต้องสั่งเรียงลำดับเพิ่ม
+     ★ Sheet ไม่มีเมธอด setIndex() — การเรียงต้องใช้ activate() คู่กับ
+       Spreadsheet.moveActiveSheet() ซึ่งไม่จำเป็นเลยในกรณีนี้ */
   var tabs = src.getSheets(), copied = 0;
   for (var i = 0; i < tabs.length; i++) {
     var c = tabs[i].copyTo(dest);
     c.setName(tabs[i].getName());
-    c.setIndex(i + 1);
     copied++;
   }
   if (copied > 0) dest.deleteSheet(placeholder);

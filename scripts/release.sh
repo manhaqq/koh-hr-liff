@@ -21,25 +21,44 @@ LIVE_DEPLOYMENT="AKfycbzoHFZWMm8csJ8mCGIBuXt417xwp9txBn_ZnbRPVsWOEIQsM99LcpH5-uG
 
 [ -n "$(git status --porcelain)" ] && { echo "❌ ยังมีไฟล์ที่ยังไม่ commit — commit ก่อนแล้วค่อยปล่อยเวอร์ชัน"; git status --short; exit 1; }
 
-echo "▸ 1/5 สร้างภาพ Rich Menu ใหม่จากไฟล์ออกแบบ"
+# ── ด่านที่ 1: ไวยากรณ์ ──
+# node --check จับพิมพ์ผิดที่ Apps Script จะไม่บอกจนกว่าจะมีคนกดใช้
+echo "▸ 1/7 ตรวจไวยากรณ์โค้ดหลังบ้าน"
+for f in apps-script/*.js; do
+  node --check "$f" || { echo "❌ ไวยากรณ์ผิดที่ $f"; exit 1; }
+done
+echo "   ผ่าน $(ls apps-script/*.js | wc -l | tr -d ' ') ไฟล์"
+
+# ── ด่านที่ 2: รันโค้ดจริงบน mock ──
+# Apps Script รันบนเซิร์ฟเวอร์ของ Google เท่านั้น ถ้าไม่มีด่านนี้
+# คนที่เจอบั๊กคนแรกคือผู้ใช้จริง ซึ่งเคยเกิดมาแล้วสามรอบ
+echo "▸ 2/7 รันเทสต์"
+node tests/run-all.js > /tmp/koh-tests.log 2>&1 || {
+  echo "❌ เทสต์ไม่ผ่าน — ยกเลิกการปล่อยเวอร์ชัน"
+  tail -40 /tmp/koh-tests.log
+  exit 1
+}
+echo "   เทสต์ผ่านทั้งหมด"
+
+echo "▸ 3/7 สร้างภาพ Rich Menu ใหม่จากไฟล์ออกแบบ"
 python3 richmenu/build.py
 
 if [ -n "$(git status --porcelain)" ]; then
   git add richmenu && git commit -m "Rebuild rich menu images for $TAG"
 fi
 
-echo "▸ 2/5 อัปโหลดโค้ดหลังบ้านขึ้น Apps Script"
+echo "▸ 4/7 อัปโหลดโค้ดหลังบ้านขึ้น Apps Script"
 ( cd apps-script && clasp push --force )
 
-echo "▸ 3/5 สร้างเวอร์ชันถาวรของ Apps Script"
+echo "▸ 5/7 สร้างเวอร์ชันถาวรของ Apps Script"
 ( cd apps-script && clasp version "$TAG ${NOTE}" )
 VER=$( cd apps-script && clasp versions | tail -1 | awk '{print $1}' )
 echo "   เวอร์ชันใหม่คือ $VER"
 
-echo "▸ 4/5 ชี้ URL เดิมไปยังเวอร์ชัน $VER"
+echo "▸ 6/7 ชี้ URL เดิมไปยังเวอร์ชัน $VER"
 ( cd apps-script && clasp deploy -i "$LIVE_DEPLOYMENT" -V "$VER" -d "$TAG ${NOTE}" )
 
-echo "▸ 5/5 ติดแท็กแล้ว push ขึ้น GitHub"
+echo "▸ 7/7 ติดแท็กแล้ว push ขึ้น GitHub"
 git tag -a "$TAG" -m "${NOTE:-$TAG}"
 git push origin main --tags
 
