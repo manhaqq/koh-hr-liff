@@ -30,6 +30,7 @@
     <li><a href="#setup">ตั้งเครื่องสำหรับพัฒนา</a></li>
     <li><a href="#release">ปล่อยเวอร์ชันใหม่ และย้อนกลับ</a></li>
     <li><a href="#db">ฐานข้อมูล — โครงสร้างและกฎเหล็ก</a></li>
+    <li><a href="#modules">โครงสร้างโค้ดหลังบ้าน และวิธีเพิ่มฟีเจอร์</a></li>
     <li><a href="#cache">ระบบแคช — วิธีทำงานและวิธีดีบัก</a></li>
     <li><a href="#richmenu">Rich Menu และระบบแจ้งเตือนด้วยจุดแดง</a></li>
     <li><a href="#security">ความปลอดภัย — ปิดแล้วอะไร ยังเปิดอยู่อะไร</a></li>
@@ -258,6 +259,109 @@ Google Sheets มักแปลงข้อความ <code>2026-08-25</code>
 แล้วแสดงตามรูปแบบภาษาของไฟล์ เช่น <code>25/8/2026</code> ซึ่งจะทำให้การเปรียบเทียบวันที่พังทั้งระบบ
 ฟังก์ชัน <code>cellToString_()</code> ใน <code>02_Data.js</code> จึงบังคับให้ทุกวันที่กลับมาเป็น
 <code>yyyy-MM-dd</code> และเวลาเป็น <code>HH:mm</code> เสมอ <strong>อย่าถอดออก</strong>
+</p>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="modules">โครงสร้างโค้ดหลังบ้าน และวิธีเพิ่มฟีเจอร์</h2>
+
+<table>
+<tr><th style="width:30%">ไฟล์</th><th>หน้าที่</th></tr>
+<tr><td><code>00_Config</code></td><td>ค่าตั้งค่า ชื่อแท็บ บทบาท และ<strong>คำศัพท์สถานะชุดกลาง</strong></td></tr>
+<tr><td><code>01_LineApi</code></td><td>ห่อ LINE Messaging API</td></tr>
+<tr><td><code>02_Data</code></td><td>อ่าน/เขียนชีต ชั้นแคช และ <code>safeCell_()</code></td></tr>
+<tr><td><code>03_Flex</code></td><td>การ์ดข้อความในแชท</td></tr>
+<tr><td><code>04_Faq</code></td><td>ตอบคำถามอัตโนมัติ</td></tr>
+<tr><td><code>05_Webhook</code></td><td>รับเหตุการณ์จาก LINE</td></tr>
+<tr><td><code>06_WebApi</code></td><td><strong>ตัวกระจายคำสั่งของ LIFF</strong> — ตรวจตัวตนที่นี่ที่เดียว</td></tr>
+<tr><td><code>07_Admin</code></td><td>เมนูในชีตและงานผู้ดูแล</td></tr>
+<tr><td><code>08_RichMenu</code></td><td>สร้างและผูกเมนูในไลน์</td></tr>
+<tr><td><code>09_Triggers</code></td><td>งานตามเวลาและล้างแคชตอนแก้ชีต</td></tr>
+<tr><td><code>10_Notify</code></td><td>จุดแดง อีเมล และโควตาข้อความ</td></tr>
+<tr><td><code>11_Reports</code></td><td>รายงานที่สร้างเป็นแท็บในชีต</td></tr>
+<tr><td><code>12_Backup</code></td><td>สำรองฐานข้อมูล</td></tr>
+<tr><td><code>12_AdminApi</code></td><td>แผงควบคุม HR — กล่องเรื่อง คิวลา ตัวแก้ตาราง</td></tr>
+<tr><td><code>13_Forms</code></td><td>เอนจินแบบทดสอบและแบบฟอร์ม</td></tr>
+<tr><td><code>14_Media</code></td><td>รูปแนบในประกาศ</td></tr>
+</table>
+
+<h3>รูปแบบการเพิ่มฟีเจอร์ใหม่</h3>
+<p>
+ฟีเจอร์ใหม่ 3 ตัวล่าสุดใช้รูปแบบเดียวกัน และควรใช้ต่อไป
+เพราะทำให้เพิ่มของใหม่ได้โดยแทบไม่แตะไฟล์เดิมเลย
+</p>
+<ol class="steps">
+  <li>สร้างไฟล์ของตัวเอง แล้ว<strong>เปิดทางเข้าเดียว</strong>
+      เช่น <code>handleAdminApi_(action, d, emp, userId)</code>
+      ที่คืน <code>null</code> เมื่อไม่ใช่คำสั่งของตัวเอง</li>
+  <li>ต่อเข้า <code>handleApi_()</code> ใน <code>06_WebApi.js</code>
+      <strong>หลัง</strong>การตรวจ ID token และสถานะพนักงาน และ<strong>ก่อน</strong> <code>switch</code></li>
+  <li>สร้างแท็บของตัวเองด้วย <code>ensureXxxSheets()</code> ของตัวเอง</li>
+</ol>
+
+<div class="box risk">
+  <span class="lab">ตำแหน่งของ hook สำคัญเรื่องความปลอดภัย</span>
+  <p>ต้องอยู่<strong>หลัง</strong>บล็อกที่ตรวจ ID token, หาพนักงานจาก userId
+  และเช็ก <code>isActive(emp)</code> เสมอ ถ้าเผลอย้ายไปไว้ใน <code>doPost</code>
+  หรือก่อนบล็อกนั้น คำสั่งที่ต้องใช้สิทธิ์จะเรียกได้โดยไม่ต้องยืนยันตัวตน</p>
+  <p>ทุก hook ห่อด้วย <code>typeof … === 'function'</code>
+  เพื่อให้ระบบยังทำงานได้ถ้าไฟล์ใดไฟล์หนึ่งยังไม่ถูกติดตั้ง</p>
+</div>
+
+<h3>คอลัมน์และแท็บที่ฟีเจอร์ใหม่เพิ่มเข้ามา</h3>
+<table>
+<tr><th style="width:26%">แท็บ</th><th>ที่เพิ่ม</th><th style="width:26%">สร้างโดย</th></tr>
+<tr><td><code>Announcements</code></td><td>คอลัมน์ <code>imageFileId</code></td>
+    <td><code>ensureAnnouncementImageColumn_()</code></td></tr>
+<tr><td><code>Schedule</code></td><td>คอลัมน์ <code>manualBy</code>, <code>manualAt</code></td>
+    <td><code>ensureAdminSheets_()</code></td></tr>
+<tr><td><code>AppGuide</code></td><td>คอลัมน์ <code>updatedAt</code></td>
+    <td><code>ensureFormsSheets()</code></td></tr>
+<tr><td><code>Forms</code> <code>FormItems</code> <code>FormResponses</code></td>
+    <td>แท็บใหม่ทั้งหมด</td><td><code>ensureFormsSheets()</code></td></tr>
+</table>
+<p>
+ทุกตัวเป็นการ<strong>เพิ่มต่อท้ายเท่านั้น</strong> และข้ามไปถ้ามีอยู่แล้ว
+ไม่มีตัวไหนแตะหัวคอลัมน์เดิม
+</p>
+
+<h3>รูปในประกาศ — ข้อจำกัดที่ต้องรู้</h3>
+<p>
+ลิงก์แชร์ของ Google Drive ใช้เป็นรูปใน Flex ไม่ได้ ระบบจึงใช้ปลายทาง
+<code>drive.google.com/thumbnail?id=…&amp;sz=w&lt;กว้าง&gt;</code>
+ซึ่งไฟล์เดียวเสิร์ฟได้หลายขนาดโดยไม่ต้องประมวลผลภาพและไม่ต้องเก็บไฟล์เพิ่ม
+</p>
+<table>
+<tr><th style="width:26%">ที่ใช้</th><th>ความกว้าง</th></tr>
+<tr><td>รูปย่อในรายการ</td><td>480</td></tr>
+<tr><td>การ์ด Flex ในแชท</td><td>1024</td></tr>
+<tr><td>หน้ารายละเอียด</td><td>1280</td></tr>
+</table>
+<div class="box warn">
+  <span class="lab">ถ้าปลายทางนี้เปลี่ยนวันไหน</span>
+  <p>มีเมนู <span class="kbd">📢 ประกาศ → 🔁 ออก URL รูปใหม่ทั้งหมด</span>
+  ที่สร้าง URL ใหม่จากรหัสไฟล์ที่เก็บไว้ทั้งชุด โดยไม่ต้องอัปโหลดรูปซ้ำ
+  นี่คือทางถอยของฟีเจอร์นี้ — อย่าลบทิ้ง</p>
+  <p>ข้อแลกเปลี่ยนที่หลบไม่ได้: รูปต้องเป็นสาธารณะ เพราะเซิร์ฟเวอร์ของ LINE
+  ต้องโหลดเองโดยไม่ได้ล็อกอินบัญชีของร้าน จึงต้องเขียนกฎห้ามแนบเอกสารส่วนบุคคล
+  ไว้ในคู่มือ HR</p>
+</div>
+
+<h3>แบบทดสอบ — ทำไมเซิร์ฟเวอร์ต้องเป็นตัวคุมสถานะ</h3>
+<p>
+คำถามถูกส่งไปทีละข้อโดย<strong>ตัดเฉลยและคำอธิบายออกก่อนเสมอ</strong>
+โดยประกอบอ็อบเจ็กต์ใหม่ทีละฟิลด์ ไม่ใช่ลบฟิลด์ออกจากแถวเดิม
+เพื่อไม่ให้คอลัมน์ที่เพิ่มเข้ามาในอนาคตหลุดออกไปโดยไม่ตั้งใจ
+</p>
+<p>ผลลัพธ์ของการออกแบบแบบนี้มี 3 อย่างที่ได้มาฟรี ๆ</p>
+<ul>
+  <li>ย้อนกลับไปแก้คำตอบไม่ได้ เพราะโครงสร้างไม่เปิดให้ทำ ไม่ใช่เพราะซ่อนปุ่ม</li>
+  <li>เฉลยไม่เคยลงไปถึงเครื่องก่อนที่คำตอบจะถูกบันทึก</li>
+  <li>โทรศัพท์ดับกลางคันแล้วเปิดใหม่ทำต่อได้ทันที เพราะไม่มีอะไรค้างอยู่ที่เครื่อง</li>
+</ul>
+<p>
+คำตอบทั้งหมดของการทำหนึ่งครั้งเก็บเป็น JSON ก้อนเดียวในเซลล์เดียว
+ซึ่งยังห่างจากเพดาน 50,000 ตัวอักษรมาก ทำให้ไม่ต้องมีแท็บที่สี่
+และเซลล์ที่ขึ้นต้นด้วย <code>{</code> เป็นสูตรไม่ได้ด้วย
 </p>
 
 <!-- ═══════════════════════════════════════════════════ -->
