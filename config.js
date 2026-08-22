@@ -18,13 +18,13 @@ window.KOH_CONFIG = {
     org:      '2011171874-NtBrLnfS',
     reports:  '2011171874-pjnsG056',
     /* แผงควบคุม HR (admin.html) — เฉพาะหัวหน้าแผนก/HR/admin
-       สร้าง LIFF ใหม่ที่ LINE Developers > ช่อง LINE Login > แท็บ LIFF > Add
+       ★ ค่านี้ต้องตรงกับ Script Property ชื่อ LIFF_ID_ADMIN เสมอ
+         หน้าเว็บอ่านจากที่นี่ ส่วนหลังบ้านอ่านจาก Script Property ไปสร้างปุ่มในการ์ด Flex
+         ถ้าใส่ไม่ครบทั้งสองที่ หน้าจะเปิดได้แต่ปุ่มทางเข้าจะไม่โผล่ (หรือกลับกัน)
+       LIFF นี้อยู่ในช่อง LINE Login ไม่ใช่ Messaging API
          Endpoint URL : https://manhaqq.github.io/koh-hr-liff/admin.html
-         Size         : Full
-         Scopes       : profile, openid          (ไม่ต้องเปิด chat_message.write)
-       แล้วเอา LIFF ID ที่ได้มาวางแทน PASTE_ADMIN_LIFF_ID ด้านล่าง
-       และใส่ค่าเดียวกันใน Script Property ชื่อ LIFF_ID_ADMIN (หลังบ้านใช้สร้างปุ่มใน Flex) */
-    admin:    'PASTE_ADMIN_LIFF_ID'
+         Size         : Full   ·   Scopes : profile, openid */
+    admin:    '2011171874-ELnISEhz'
   },
 
   /* 3) ข้อมูลร้าน */
