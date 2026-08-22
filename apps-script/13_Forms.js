@@ -526,7 +526,12 @@ function seedFormsIfEmpty_() {
       type: 'single', question: s[1],
       correct: s[3], explain: s[4],
       sourceTab: s[5], sourceId: resolveSourceId_(s[5], s[6]),
-      points: 1, status: 'on', updatedAt: today
+      /* ★ ปิดไว้ทีละข้อ ไม่ใช่ปิดแค่ที่ตัวชุด
+         ถ้าข้อเป็น 'on' หมดแล้วปิดแค่แถว F001 การเปิดใช้จะเหลือสวิตช์เดียว
+         ซึ่งแปลว่าคนที่ยังไม่ได้อ่านทวนกดครั้งเดียวแล้วข้อสอบที่ไม่มีใครรับรอง
+         ถึงมือพนักงาน 60 คนพร้อมกัน — ด่านที่ตั้งใจให้มีจะไม่มีอยู่จริง
+         ปิดทีละข้อบังคับให้ต้องเปิดผ่านตาทุกข้อก่อน */
+      points: 1, status: 'off', updatedAt: today
     };
     CHOICE_KEYS_.forEach(function (k, i) { o['choice' + k] = s[2][i] || ''; });
     return o;

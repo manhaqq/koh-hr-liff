@@ -20,6 +20,7 @@ var REQUIRED_PROPS = [
   'LIFF_ID_APPGUIDE',       // คู่มือแอป myHR Cloud
   'LIFF_ID_ORG',            // ผังองค์กร
   'LIFF_ID_REPORTS',        // รายการรายงาน
+  'LIFF_ID_ADMIN',          // แผงควบคุม HR — ถ้าไม่ตั้ง ปุ่มเข้าแผงจะไม่โผล่แบบเงียบ ๆ
   'HR_NOTIFY_GROUP_ID',     // groupId ของกลุ่ม LINE ทีม HR (โหมด 0 บาท เว้นว่างได้)
   'WEBAPP_URL'              // URL ของ Web App (ลงท้าย /exec) ใช้สร้างลิงก์ปฏิทิน
 ];

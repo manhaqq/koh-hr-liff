@@ -8,6 +8,15 @@
  *******************************************************************/
 
 function doPost(e) {
+  /* ★ บันทึกว่ามีคำขอเข้ามาแล้ว
+     เมนู "④ 📡 LINE ส่งข้อมูลเข้ามาจริงไหม" อ่านสองคีย์นี้ แต่ไม่เคยมีโค้ดไหนเขียนมันเลย
+     มันจึงตอบว่า "ยังไม่มีข้อมูลเข้ามา" ตลอดไปแม้ระบบทำงานปกติดี
+     ซึ่งแย่กว่าไม่มีเมนูนี้ เพราะทำให้คนไล่หาปัญหาผิดที่ */
+  try {
+    P.setProperty('LAST_WEBHOOK_AT', now_());
+    P.setProperty('WEBHOOK_HITS', String((Number(cfg('WEBHOOK_HITS', '0')) || 0) + 1));
+  } catch (e_) { /* ห้ามให้การนับสถิติทำให้ webhook ล่ม */ }
+
   var out = { ok: false };
   try {
     var body = (e && e.postData && e.postData.contents) ? e.postData.contents : '{}';
@@ -247,6 +256,20 @@ function handlePostback_(ev, emp) {
   if (a === 'faq_rate') {
     audit(emp.empCode, 'FAQ_RATE', p.id, p.v === '1' ? 'ตรงคำถาม' : 'ไม่ตรง');
     reply(rt, { type: 'text', text: 'ขอบคุณสำหรับฟีดแบ็กค่ะ 🙏' });
+    return;
+  }
+
+  /* อ่านคำตอบของเรื่องหนึ่งเรื่อง — ★ จุดนี้คือที่ที่ผู้ใช้ "ได้อ่านคำตอบจริง"
+     จึงเป็นจุดที่ถูกต้องในการล้างจุดแดง ไม่ใช่ตอนเปิดเมนูหรือตอนดูรายการ */
+  if (a === 'ticket_reply') {
+    var tk = findTicket(String(p.id || ''));
+    /* ต้องเป็นเรื่องของคนที่กดเองเท่านั้น ห้ามให้เดารหัสเรื่องของคนอื่นแล้วอ่านได้ */
+    if (!tk || String(tk.empCode || '').toUpperCase() !== String(emp.empCode || '').toUpperCase()) {
+      reply(rt, withQuickReply({ type: 'text', text: 'ไม่พบเรื่องนี้ในรายการของคุณค่ะ' }));
+      return;
+    }
+    clearBadge(ev.source.userId, 'hr');
+    reply(rt, flexTicketUpdate(tk));
     return;
   }
 

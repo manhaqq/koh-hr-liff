@@ -467,7 +467,14 @@ function flexMyTickets(list) {
       ]},
       { type: 'text', text: String(t.subject || t.category), size: 'sm', color: C.ink, wrap: true, weight: 'bold' },
       { type: 'text', text: String(t.createdAt).slice(0, 10) + (t.reply ? '  •  มีคำตอบแล้ว' : '  •  รอดำเนินการ'), size: 'xxs', color: C.sub }
-    ]};
+    ].concat(t.reply ? [
+      /* ★ ถ้ามีคำตอบต้องมีปุ่มให้กดอ่าน
+         เดิมรายการนี้บอกว่า "มีคำตอบแล้ว" แต่ไม่มีทางกดต่อไปอ่านได้เลย
+         (การ์ดที่แสดงคำตอบมีอยู่แล้วแต่ไม่เคยมีใครเรียก) พนักงานจึงเห็นว่ามีคำตอบ
+         แต่อ่านไม่ได้ และจุดแดงก็ค้างอยู่ เพราะจุดล้างอยู่ที่การเปิดหน้าเว็บเท่านั้น */
+      { type: 'button', style: 'primary', height: 'sm', margin: 'sm', color: C.primary,
+        action: fxPost_('📖 อ่านคำตอบ', 'action=ticket_reply&id=' + encodeURIComponent(t.ticketId), 'อ่านคำตอบ') }
+    ] : []) };
   });
   return fx_('เรื่องที่ส่งถึง HR', {
     type: 'bubble',
