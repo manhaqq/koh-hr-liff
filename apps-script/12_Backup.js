@@ -32,31 +32,56 @@ function backupDatabase() {
   var stamp    = Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM-dd_HHmm');
   var name     = 'HRHub_' + stamp;
 
-  /* ★ คัดลอกด้วย SpreadsheetApp ไม่ใช่ Drive
-     ไฟล์ต้นฉบับ "ไม่ได้" ถูกสร้างโดยสคริปต์นี้ สิทธิ์ drive.file จึงเปิดไฟล์นั้นไม่ได้
-     แต่ SpreadsheetApp เปิดได้ด้วยสิทธิ์ spreadsheets ที่มีอยู่แล้ว
-     ส่วนสำเนาที่ได้ สคริปต์เป็นคนสร้าง จึงย้ายเข้าโฟลเดอร์ต่อได้ */
-  var copyId = SpreadsheetApp.openById(CFG.ssId).copy(name).getId();
-  driveMoveTo_(copyId, folderId);
+  /* ★★ ลำดับตรงนี้สำคัญมาก และเคยทำผิดมาแล้ว
+   *
+   *  สิทธิ์ drive.file ให้ Drive API เห็นเฉพาะไฟล์ที่ "สร้างผ่าน Drive API เอง"
+   *  เท่านั้น ไฟล์ที่ SpreadsheetApp.copy() สร้างขึ้นไม่นับอยู่ในชุดนั้น
+   *  ต่อให้เพิ่งสร้างเสร็จหมาด ๆ Drive API ก็ยังตอบว่า File not found
+   *  ทำให้ย้ายเข้าโฟลเดอร์ไม่ได้ ลบของเก่าไม่ได้ และไล่รายการก็ไม่เห็น
+   *
+   *  จึงต้องกลับด้าน: ให้ Drive API สร้างไฟล์เปล่าขึ้นมาก่อน (แอปเป็นเจ้าของแน่นอน)
+   *  แล้วค่อยคัดลอกแท็บเข้าไปด้วย SpreadsheetApp ซึ่งใช้สิทธิ์ spreadsheets ที่มีอยู่แล้ว
+   *  วิธีนี้ได้ทั้งรูปแบบและสูตรครบ และควบคุมวงจรชีวิตไฟล์ได้เต็มที่ */
+  var destId = driveReady_().Files.create(
+    { name: name, mimeType: MimeType.GOOGLE_SHEETS, parents: [folderId] },
+    null, { fields: 'id' }).id;
 
-  /* ลบสำเนาเก่าที่เกิน BACKUP_KEEP — driveList_ เรียงจากใหม่ไปเก่าให้แล้ว */
+  var src  = SpreadsheetApp.openById(CFG.ssId);
+  var dest = SpreadsheetApp.openById(destId);
+
+  /* ชีตเปล่าที่เพิ่งสร้างมีแท็บตั้งต้นติดมา 1 แท็บ เปลี่ยนชื่อกันชนก่อน
+     เผื่อฐานข้อมูลจริงมีแท็บชื่อเดียวกัน แล้วค่อยลบทิ้งตอนท้าย */
+  var placeholder = dest.getSheets()[0];
+  placeholder.setName('__tmp__' + stamp);
+
+  var tabs = src.getSheets(), copied = 0;
+  for (var i = 0; i < tabs.length; i++) {
+    var c = tabs[i].copyTo(dest);
+    c.setName(tabs[i].getName());
+    c.setIndex(i + 1);
+    copied++;
+  }
+  if (copied > 0) dest.deleteSheet(placeholder);
+
+  /* ลบสำเนาเก่าที่เกิน BACKUP_KEEP — driveList_ เรียงจากใหม่ไปเก่าให้แล้ว
+     และเห็นเฉพาะไฟล์ที่สคริปต์สร้างเอง จึงไม่มีทางไปแตะไฟล์ของคนอื่น */
   var files = driveList_(folderId, 'HRHub_');
   var removed = 0;
-  for (var i = BACKUP_KEEP; i < files.length; i++) {
-    driveTrash_(files[i].id);      /* ทิ้งลงถังขยะ ไม่ลบถาวร กู้ได้ 30 วัน */
+  for (var k = BACKUP_KEEP; k < files.length; k++) {
+    driveTrash_(files[k].id);      /* ทิ้งลงถังขยะ ไม่ลบถาวร กู้ได้ 30 วัน */
     removed++;
   }
 
   var kept = Math.min(files.length, BACKUP_KEEP);
-  audit(actor_(), 'BACKUP', name, 'เก็บไว้ ' + kept + ' ชุด, ทิ้งเก่า ' + removed + ' ชุด');
-  return { name: name, id: copyId, folderId: folderId, kept: kept, removed: removed };
+  audit(actor_(), 'BACKUP', name, copied + ' แท็บ, เก็บไว้ ' + kept + ' ชุด, ทิ้งเก่า ' + removed + ' ชุด');
+  return { name: name, id: destId, folderId: folderId, tabs: copied, kept: kept, removed: removed };
 }
 
 /** เมนู: สำรองข้อมูลเดี๋ยวนี้ */
 function backupDatabaseUi() {
   var r = backupDatabase();
   alert_('สำรองข้อมูลแล้ว ✅',
-    'ไฟล์: ' + r.name +
+    'ไฟล์: ' + r.name + '  (' + r.tabs + ' แท็บ)' +
     '\nเก็บสำเนาไว้ ' + r.kept + ' ชุด' + (r.removed ? (' (ทิ้งของเก่า ' + r.removed + ' ชุด)') : '') +
     '\n\nอยู่ในโฟลเดอร์ "สำรองฐานข้อมูล HR Hub" ใน Google Drive' +
     '\n\n⚠️ สำเนานี้ยังอยู่ในบัญชี Google เดียวกันกับต้นฉบับ' +

@@ -64,17 +64,19 @@ function driveUpload_(blob, name, folderId) {
   return res.id;
 }
 
-/** ย้ายไฟล์เข้าโฟลเดอร์ (ใช้กับไฟล์ที่สคริปต์สร้างเองเท่านั้น) */
-function driveMoveTo_(fileId, folderId) {
-  driveReady_();
-  var cur = Drive.Files.get(fileId, { fields: 'parents' });
-  var old = (cur.parents || []).join(',');
-  Drive.Files.update({}, fileId, null, {
-    addParents: folderId,
-    removeParents: old || undefined,
-    fields: 'id,parents'
-  });
-}
+/* ── ทำไมไม่มีฟังก์ชัน "ย้ายไฟล์เข้าโฟลเดอร์" ──────────────────────────
+ *
+ *  เคยมี แล้วพังจริงมาแล้ว จึงถอดออกและบันทึกไว้กันพลาดซ้ำ
+ *
+ *  ★ drive.file ให้ Drive API เห็นเฉพาะไฟล์ที่ "สร้างผ่าน Drive API เอง"
+ *    ไฟล์ที่สร้างด้วยวิธีอื่น เช่น SpreadsheetApp.copy() ไม่นับอยู่ในชุดนั้น
+ *    ต่อให้เพิ่งสร้างเสร็จในบรรทัดก่อนหน้า Drive.Files.get ก็ยังตอบว่า
+ *    File not found ซึ่งเป็นข้อความที่ทำให้เข้าใจผิดว่าไฟล์หายไปไหน
+ *
+ *  วิธีที่ถูกคือ "สร้างไฟล์ปลายทางด้วย Drive API ตั้งแต่แรก" พร้อมระบุ parents
+ *  แล้วค่อยเติมเนื้อหาลงไปด้วย SpreadsheetApp ทีหลัง
+ *  ดูตัวอย่างที่ backupDatabase() ใน 12_Backup.gs
+ * ──────────────────────────────────────────────────────────────────── */
 
 /**
  * รายชื่อไฟล์ในโฟลเดอร์ เรียงจากใหม่ไปเก่า
