@@ -185,15 +185,25 @@ function normalizeTicketStatus(v) {
      ซึ่งเป็นความผิดพลาดที่อันตรายที่สุดของไฟล์นี้ */
   if (s.indexOf('ยังไม่') >= 0 || s.indexOf('ไม่ได้') >= 0) return TICKET_STATUS.WIP;
 
+  /* ★ คำที่ขึ้นต้นด้วย "รอ" แปลว่ายังไม่เกิดขึ้น แต่มีคำว่าเสร็จซ่อนอยู่ข้างใน
+       "รอตอบ" มีคำว่า "ตอบ"  ·  "รอปิดเรื่อง" มีคำว่า "ปิด"
+     จึงต้องกันไม่ให้ตกไปเข้าเงื่อนไข "ตอบแล้ว/ปิดแล้ว" ด้านล่าง
+     ★ แต่ไม่ตอบกลับเป็น WIP ทันที เพราะบางคำเป็นศัพท์ของ "ใบลา" ที่หลงมาอยู่ในแท็บเรื่อง
+       เช่น "รออนุมัติ" ซึ่งควรถือว่า "ไม่รู้จัก" เพื่อให้ migration ไม่แตะ
+       และยกขึ้นมาให้ HR ตัดสินเอง — เครื่องไม่ควรเดาแทนคนบนข้อมูลแรงงานจริง
+     ปล่อยให้ไหลไปเช็ก "กำลังดำเนินการ/ใหม่" ต่อ ถ้าไม่เข้าอะไรเลยจะได้ '' ซึ่งนับว่ายังค้าง */
+  var waiting = s.indexOf('รอ') >= 0;
+
   /* เช็ก "ปิด/เสร็จ" ก่อน เพราะเป็นสถานะที่จบที่สุด
      ถ้ามีคนพิมพ์ว่า "ตอบแล้วปิดเรื่อง" ต้องนับเป็นปิด ไม่ใช่แค่ตอบแล้ว */
-  if (s.indexOf('เสร็จ') >= 0 || s.indexOf('ปิด') >= 0 ||
-      ['closed', 'close', 'done', 'resolved', 'complete', 'completed'].indexOf(low) >= 0) {
+  if (!waiting && (s.indexOf('เสร็จ') >= 0 || s.indexOf('ปิด') >= 0 ||
+      ['closed', 'close', 'done', 'resolved', 'complete', 'completed'].indexOf(low) >= 0)) {
     return TICKET_STATUS.CLOSED;
   }
-  if (s.indexOf('ตอบ') >= 0 || ['answered', 'replied', 'reply'].indexOf(low) >= 0) {
+  if (!waiting && (s.indexOf('ตอบ') >= 0 || ['answered', 'replied', 'reply'].indexOf(low) >= 0)) {
     return TICKET_STATUS.ANSWERED;
   }
+
   if (s.indexOf('ดำเนินการ') >= 0 || s.indexOf('กำลัง') >= 0 || s.indexOf('รับเรื่อง') >= 0 ||
       ['wip', 'in progress', 'in_progress', 'inprogress', 'processing'].indexOf(low) >= 0) {
     return TICKET_STATUS.WIP;
@@ -238,7 +248,11 @@ function normalizeLeaveStatus(v) {
 
 /** ใบลานี้ยังรอ HR ตัดสินอยู่ไหม */
 function isLeavePending(status) {
-  return normalizeLeaveStatus(status) === LEAVE_STATUS.PENDING;
+  var n = normalizeLeaveStatus(status);
+  /* ★ คำที่ระบบอ่านไม่ออก (normalize คืน '') ต้องถือว่า "ยังค้าง" เสมอ
+     เพื่อให้ HR เห็นแล้วไปแก้เอง ไม่ใช่หายไปเงียบ ๆ เหมือนถูกอนุมัติแล้ว
+     ตรงกับที่ isTicketOpen ทำอยู่ — ทั้งสองฝั่งต้องเอนไปทาง "ยังไม่จบ" เหมือนกัน */
+  return n === LEAVE_STATUS.PENDING || n === '';
 }
 
 /** ตรวจว่าตั้งค่าครบหรือยัง — เรียกจากเมนู 🔧 */

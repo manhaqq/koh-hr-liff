@@ -95,26 +95,46 @@ var MENU_VARIANTS = [
  * ที่ยอมให้ Drive มาก่อน เพราะถ้าใครเคยตั้งไว้แล้วจะได้ไม่พังตอนอัปเดตโค้ด
  */
 function richMenuImage_(v) {
-  var fileId = cfg(v.img);
-  if (fileId) {
-    /* ทางเก่าที่เก็บภาพไว้ใน Drive — ใช้ได้เฉพาะกับไฟล์ที่สคริปต์นี้สร้างเอง
-       เพราะสิทธิ์แคบลงเหลือ drive.file แล้ว ภาพที่คนอัปโหลดเองด้วยมือจะเปิดไม่ได้
-       ทางที่แนะนำคือลบ Script Property ตัวนี้ทิ้ง แล้วให้ระบบดึงจาก GitHub Pages แทน */
-    return driveBlob_(fileId, 'image/png');
-  }
-
+  /* ★ เว็บมาก่อน Drive เสมอ — เคยสลับกันแล้วพัง
+     ตอนตั้งระบบครั้งแรกเคยเก็บภาพไว้ใน Drive แล้วจำ File ID ไว้ใน Script Properties
+     พอเปลี่ยนมาเก็บภาพในโปรเจ็คและเสิร์ฟผ่าน GitHub Pages ค่าเก่ายังค้างอยู่
+     ถ้าให้ Drive มาก่อน ระบบจะวิ่งไปทางเก่าแล้วเจอ 404 เพราะสิทธิ์ drive.file
+     เปิดได้เฉพาะไฟล์ที่สคริปต์สร้างเอง ส่วนภาพเก่าคนอัปโหลดเข้าไปเองด้วยมือ
+     ให้เว็บมาก่อนจึงถูกต้องกว่า และค่าเก่าที่ค้างอยู่ก็ไม่ทำให้อะไรพัง */
   var base = cfg('RICHMENU_IMG_BASE_URL', RICHMENU_IMG_BASE_DEFAULT).replace(/\/+$/, '');
   var url  = base + '/' + v.file + '.jpg';
-  var res  = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
-  if (res.getResponseCode() !== 200) {
-    throw new Error('โหลดภาพเมนูไม่สำเร็จ (' + res.getResponseCode() + ')\n' + url +
-                    '\n\nตรวจว่า push ไฟล์ richmenu/*.jpg ขึ้น GitHub แล้ว และ GitHub Pages เผยแพร่เรียบร้อย');
+  var res  = null, code = 0;
+  try {
+    res  = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
+    code = res.getResponseCode();
+  } catch (e) { code = 0; }
+
+  if (code === 200) return richMenuCheckSize_(res.getBlob(), v.file + '.jpg');
+
+  /* เว็บโหลดไม่ได้ ค่อยลองทางเก่าใน Drive ถ้าเคยตั้งไว้ */
+  var fileId = cfg(v.img);
+  if (fileId) {
+    try { return richMenuCheckSize_(driveBlob_(fileId, 'image/png'), 'Drive:' + fileId); }
+    catch (e2) {
+      throw new Error(
+        'โหลดภาพเมนูไม่ได้ทั้งสองทาง\n\n' +
+        '1) เว็บ: ' + url + '  → ' + (code || 'ต่อไม่ติด') + '\n' +
+        '2) Drive (' + v.img + '): ' + e2.message + '\n\n' +
+        'ทางแก้ที่แนะนำ: ลบ Script Property ' + v.img + ' ทิ้ง แล้วตรวจว่า\n' +
+        'push ไฟล์ richmenu/*.jpg ขึ้น GitHub และ GitHub Pages เผยแพร่เรียบร้อยแล้ว');
+    }
   }
-  var blob = res.getBlob();
-  /* LINE รับไม่เกิน 1 MB ต่อภาพ — กันพลาดตั้งแต่ต้นทาง จะได้ไม่ไปเจอ error ปลายทางที่อ่านไม่รู้เรื่อง */
-  if (blob.getBytes().length > 1024 * 1024) {
-    throw new Error('ภาพ ' + v.file + '.jpg ใหญ่เกิน 1 MB ซึ่ง LINE ไม่รับ\n' +
-                    'ลดคุณภาพใน richmenu/build.py (ตัวแปร QUALITY) แล้วสร้างใหม่');
+
+  throw new Error('โหลดภาพเมนูไม่สำเร็จ (' + (code || 'ต่อไม่ติด') + ')\n' + url +
+                  '\n\nตรวจว่า push ไฟล์ richmenu/*.jpg ขึ้น GitHub แล้ว และ GitHub Pages เผยแพร่เรียบร้อย');
+}
+
+/** LINE รับไม่เกิน 1 MB ต่อภาพ — กันตั้งแต่ต้นทาง จะได้ไม่ไปเจอ error ปลายทางที่อ่านไม่รู้เรื่อง */
+function richMenuCheckSize_(blob, label) {
+  var n = blob.getBytes().length;
+  if (n > 1024 * 1024) {
+    throw new Error('ภาพ ' + label + ' ใหญ่ ' + Math.round(n / 1024) + ' KB ซึ่งเกิน 1 MB ที่ LINE รับได้\n' +
+                    'ลดค่า QUALITY ใน richmenu/build.py แล้วสร้างใหม่');
   }
   return blob;
 }

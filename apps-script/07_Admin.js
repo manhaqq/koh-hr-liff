@@ -1043,8 +1043,12 @@ function migrateStatusVocabulary() {
     return;
   }
 
-  var backups = [backupSheetCopy_(SHEETS.TICKETS), backupSheetCopy_(SHEETS.LEAVE)]
-                .filter(Boolean);
+  /* ★ สำรองเฉพาะแท็บที่จะถูกแก้จริง
+     เดิมสำรองทั้งสองแท็บทุกครั้ง กดเมนูซ้ำ 3 รอบก็ได้แท็บสำรอง 6 แท็บทั้งที่ไม่มีอะไรเปลี่ยน
+     และถ้าสำรองไม่สำเร็จ backupSheetCopy_ จะ throw ทำให้ยังไม่มีการเขียนข้อมูลใด ๆ */
+  var backups = [];
+  if (tk.changes.length) backups.push(backupSheetCopy_(SHEETS.TICKETS));
+  if (lv.changes.length) backups.push(backupSheetCopy_(SHEETS.LEAVE));
 
   var doneTk = applyStatusChanges_(SHEETS.TICKETS, tk.changes);
   var doneLv = applyStatusChanges_(SHEETS.LEAVE,   lv.changes);
@@ -1096,9 +1100,15 @@ function applyStatusChanges_(sheetName, changes) {
 /** ก๊อบปี้ทั้งแท็บเป็นแท็บสำรองลงวันที่ (กู้คืนได้เองโดยไม่ต้องพึ่งประวัติเวอร์ชัน) */
 function backupSheetCopy_(sheetName) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    /* ★ ต้องเป็น ss_() ไม่ใช่ getActiveSpreadsheet()
+       สคริปต์อาจไม่ได้ผูกกับไฟล์ฐานข้อมูล (หรือรันจากทริกเกอร์ที่ไม่มีไฟล์ที่ "เปิดอยู่")
+       getActiveSpreadsheet() จึงชี้ผิดไฟล์หรือเป็น null แล้วสำรองลงผิดที่ */
+    var ss  = ss_();
     var src = ss.getSheetByName(sheetName);
-    if (!src) return '';
+    /* ★ หาแท็บไม่เจอ = หยุด ห้ามคืนค่าว่างเงียบ ๆ
+       ของเดิมคืน '' แล้วผู้เรียก .filter(Boolean) ทิ้ง ทำให้ migration
+       เดินหน้าเขียนทับข้อมูลแรงงานจริงต่อโดยไม่มีสำเนาให้กู้คืนเลย */
+    if (!src) throw new Error('ไม่พบแท็บ ' + sheetName + ' ในไฟล์ฐานข้อมูล');
     var name = 'สำรอง-' + sheetName + '-' + Utilities.formatDate(new Date(), CFG.TZ, 'yyyyMMdd-HHmmss');
     src.copyTo(ss).setName(name);
     return name;
