@@ -40,11 +40,12 @@ node tests/run-all.js > /tmp/koh-tests.log 2>&1 || {
 }
 echo "   เทสต์ผ่านทั้งหมด"
 
-echo "▸ 3/7 สร้างภาพ Rich Menu ใหม่จากไฟล์ออกแบบ"
+echo "▸ 3/7 ตรวจภาพ Rich Menu (สร้างใหม่เฉพาะเมื่อไฟล์ออกแบบใหม่กว่า)"
 python3 richmenu/build.py
 
 if [ -n "$(git status --porcelain)" ]; then
   git add richmenu && git commit -m "Rebuild rich menu images for $TAG"
+  echo "   (ภาพเปลี่ยน — อย่าลืมกดเมนู 🎛️ Rich Menu > สร้าง/อัปเดต Rich Menu ทั้งหมด หลังปล่อยเสร็จ)"
 fi
 
 echo "▸ 4/7 อัปโหลดโค้ดหลังบ้านขึ้น Apps Script"

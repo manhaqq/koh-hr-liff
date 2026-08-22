@@ -13,7 +13,10 @@
 ต้องติดตั้ง Pillow ก่อน:  pip install Pillow
 """
 import os
+import sys
 from PIL import Image, ImageDraw, ImageFont
+
+FORCE = '--force' in sys.argv
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC  = os.path.join(HERE, 'src', 'base.png')
@@ -37,6 +40,15 @@ def dot(im, cx, cy, r=46, ring=10):
 
 def save(im, name):
     p = os.path.join(HERE, name + '.jpg')
+    # ★ ห้ามเขียนทับภาพที่คนแก้เอง
+    #   release.sh เรียกไฟล์นี้ทุกครั้งที่ปล่อยเวอร์ชัน ถ้าเขียนทับทุกรอบ
+    #   ภาพที่ใครสักคนแก้เองหรืออัปโหลดทับไว้จะหายเงียบ ๆ โดยไม่มีอะไรฟ้อง
+    #   กติกา: สร้างใหม่เฉพาะเมื่อไฟล์ออกแบบต้นทางใหม่กว่าภาพผลลัพธ์
+    #   ถ้าอยากบังคับสร้างใหม่ทั้งชุด ให้ใส่ --force
+    if not FORCE and os.path.exists(p) and os.path.getmtime(p) >= os.path.getmtime(SRC):
+        kb = os.path.getsize(p) // 1024
+        print(f'  {name:8s} ข้ามไว้ — ภาพปัจจุบันใหม่กว่าไฟล์ออกแบบ ({kb} KB)')
+        return
     im.save(p, quality=QUALITY, optimize=True, progressive=True)
     kb = os.path.getsize(p) // 1024
     flag = '' if kb < 1000 else '  ⚠️ เกิน 1 MB — LINE จะไม่รับ'
@@ -95,6 +107,10 @@ if __name__ == '__main__':
     if not os.path.exists(SRC):
         raise SystemExit(f'ไม่พบไฟล์ต้นฉบับ: {SRC}')
     print('สร้างภาพ Rich Menu จาก', SRC)
+    if FORCE:
+        print('  โหมด --force: สร้างใหม่ทุกไฟล์ ทับของเดิมทั้งหมด')
     build_main()
     build_guest()
     print('เสร็จแล้ว — อัปโหลดด้วยเมนู "สร้าง/อัปเดต Rich Menu ทั้งหมด" ใน Google Sheet')
+    if not FORCE:
+        print('(ภาพที่ข้ามไว้คือภาพที่ใหม่กว่าไฟล์ออกแบบ — ใช้ --force ถ้าต้องการสร้างใหม่ทั้งหมด)')
